@@ -13,8 +13,14 @@ app.use(express.static('public'));
 io.on('connection', socket => {
   console.log('someone connected');
 
-  socket.on('chat message', msg => {
-    io.emit('chat message', msg); // 廣播給所有連線的人
+  socket.on('join room', roomId => {
+    socket.join(roomId);
+    console.log(`use enter room ${roomId}`);
+    socket.to(roomId).emit('chat message', `someone enter room ${roomId}`);
+  });
+
+  socket.on('chat message', ({ roomId, message }) => {
+    io.to(roomId).emit('chat message', message);
   });
 
   socket.on('disconnect', () => {

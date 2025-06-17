@@ -3,14 +3,28 @@
 <head>
   <meta charset="utf-8">
   <title>狼人殺聊天室</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    #chat, #form { display: none; }
+  </style>
 </head>
 <body>
-  <h1>狼人殺聊天室</h1>
-  <ul id="messages"></ul>
-  <form id="form">
-    <input id="input" autocomplete="off" placeholder="輸入訊息..." /><button>送出</button>
-  </form>
+  <h1>加入聊天室房間</h1>
+  <div id="room-section">
+    <input id="room-input" placeholder="輸入房號或建立房間">
+    <button onclick="joinRoom()">加入房間</button>
+    <button onclick="createRoom()">建立隨機房間</button>
+  </div>
+
+  <div id="chat">
+    <h2 id="room-title"></h2>
+    <ul id="messages"></ul>
+    <form id="form">
+      <input id="input" autocomplete="off" placeholder="輸入訊息" />
+      <button>送出</button>
+    </form>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 </body>
