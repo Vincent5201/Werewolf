@@ -1,31 +1,218 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
-  <meta charset="utf-8">
-  <title>狼人殺聊天室</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>狼人殺遊戲</title>
   <style>
-    body { font-family: Arial; padding: 20px; }
-    #chat, #form { display: none; }
+    body { font-family: sans-serif; background: #222; color: #fff; text-align: center; }
+    .hidden { display: none; }
+    .seats { display: grid; grid-template-columns: repeat(4, 80px); gap: 10px; justify-content: center; margin-top: 20px; }
+    .seat { width: 80px; height: 80px; border-radius: 50%; background: gray; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .seat.taken { background: #555; }
+    .seat.you { background: green; }
+    #chat { margin-top: 20px; max-height: 200px; overflow-y: auto; border: 1px solid #888; padding: 10px; background: #111; }
+    #messageForm { margin-top: 10px; }
+    #game-controls button { margin: 5px; }
   </style>
 </head>
 <body>
-  <h1>加入聊天室房間</h1>
-  <div id="room-section">
-    <input id="room-input" placeholder="輸入房號或建立房間">
-    <button onclick="joinRoom()">加入房間</button>
-    <button onclick="createRoom()">建立隨機房間</button>
+  <h1>狼人殺</h1>
+
+  <div id="joinScreen">
+    <input id="roomInput" placeholder="房號" />
+    <input id="nameInput" placeholder="你的名稱" />
+    <button id="joinBtn">加入遊戲</button>
   </div>
 
-  <div id="chat">
-    <h2 id="room-title"></h2>
-    <ul id="messages"></ul>
-    <form id="form">
-      <input id="input" autocomplete="off" placeholder="輸入訊息" />
+  <div id="gameScreen" class="hidden">
+    <h2 id="status">等待開始...</h2>
+
+    <div class="seats" id="seats"></div>
+    <button id="startBtn">開始遊戲</button>
+
+    <div id="game-controls"></div>
+
+    <div id="chat"></div>
+    <form id="messageForm">
+      <input id="messageInput" autocomplete="off" placeholder="輸入訊息..." />
       <button>送出</button>
     </form>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
+  <script>
+    const socket = io();
+    const joinScreen = document.getElementById('joinScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    const seatsDiv = document.getElementById('seats');
+    const chatDiv = document.getElementById('chat');
+    const messageForm = document.getElementById('messageForm');
+    const messageInput = document.getElementById('messageInput');
+    const statusH2 = document.getElementById('status');
+    const gameControls = document.getElementById('game-controls');
+
+    let yourName = null;
+    let yourRole = null;
+
+    document.getElementById('joinBtn').onclick = () => {
+        const room = document.getElementById('roomInput').value;
+        yourName = document.getElementById('nameInput').value;
+        if (!room || !yourName) return alert('請輸入房號與名稱');
+        socket.emit('join room', { roomId: room, name: yourName });
+        joinScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+    };
+
+    socket.on('name exists', () => {
+        alert('名稱已被使用');
+        location.reload();
+    });
+
+    socket.on('update seats', ({ seats }) => {
+        seatsDiv.innerHTML = '';
+        seats.forEach((name, i) => {
+            const seat = document.createElement('div');
+            seat.className = 'seat';
+            if (name) seat.classList.add('taken');
+            if (name === yourName) seat.classList.add('you');
+            seat.innerText = name || i + 1;
+            seat.onclick = () => {
+                if (name === yourName) socket.emit('stand up');
+                else if (!name) socket.emit('sit down', i);
+            };
+            seatsDiv.appendChild(seat);
+        });
+    });
+
+    document.getElementById('startBtn').onclick = () => {
+        socket.emit('start game');
+    };
+
+    socket.on('chat message', msg => {
+        const line = document.createElement('div');
+        line.textContent = msg;
+        chatDiv.appendChild(line);
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+    });
+
+    messageForm.onsubmit = e => {
+        e.preventDefault();
+        if (messageInput.value) {
+            socket.emit('chat message', messageInput.value);
+            messageInput.value = '';
+        }
+    };
+
+    socket.on('your role', role => {
+        yourRole = role;
+        statusH2.textContent = `你的角色是：${translateRole(role)}`;
+    });
+
+    socket.on('night phase', () => {
+        statusH2.textContent = '夜晚來臨...';
+        gameControls.innerHTML = '';
+    });
+
+    socket.on('werewolf teammates', teammates => {
+        alert('你的狼人隊友有：' + teammates.join('、'));
+    });
+
+    socket.on('night action', ({ type, players, used, victim }) => {
+        gameControls.innerHTML = '';
+        if (type === 'seer') {
+            statusH2.textContent = '預言家，請選擇要查驗的對象';
+            players.forEach(p => {
+                if (p === yourName) return;
+                const btn = document.createElement('button');
+                btn.textContent = p;
+                btn.onclick = () => socket.emit('night result', { type: 'seer', target: p });
+                gameControls.appendChild(btn);
+            });
+        } else if (type === 'wolf') {
+            statusH2.textContent = '狼人，請投票要殺的人';
+            players.forEach(p => {
+                if (p === yourName) return;
+                const btn = document.createElement('button');
+                btn.textContent = p;
+                btn.onclick = () => socket.emit('night result', { type: 'wolf', target: p });
+                gameControls.appendChild(btn);
+            });
+        } else if (type === 'witch') {
+            statusH2.textContent = '女巫行動';
+            let noSave = true;
+            const btn0 = document.createElement('button');
+            btn.textContent = `放棄用藥`;
+            btn.onclick = () => {
+                socket.emit('night result', { type: 'witch-skip' });
+            };
+            gameControls.appendChild(btn);
+            if (!used.save) {
+                const btn = document.createElement('button');
+                btn.textContent = `${victim}死了，要救嗎`;
+                btn.onclick = () => {
+                    const target = prompt('輸入1表示救');
+                    if (target == 1) {
+                        socket.emit('night result', { type: 'witch-save' });
+                        noSave = false;
+                    }
+                };
+                gameControls.appendChild(btn);
+            }
+            if (!used.poison && noSave) {
+                const btn2 = document.createElement('button');
+                btn2.textContent = '使用毒藥殺人';
+                btn2.onclick = () => {
+                    const target = prompt('要毒誰？輸入名字');
+                    if (target) socket.emit('night result', { type: 'witch-poison', target: target });
+                };
+                gameControls.appendChild(btn2);
+            }
+        }
+    });
+
+    socket.on('seer result', ({ target, role }) => {
+        alert(`${target} 的身份是：${role}`);
+    });
+
+    socket.on('hunter shoot', ({ players }) => {
+        const shouldShoot = confirm('你死了，你是獵人！要不要開槍？');
+        if (!shouldShoot) {
+            socket.emit('hunter shot', null);
+            return;
+        }
+        const target = prompt('請輸入你要開槍的對象（名稱）：\n' + players.join(', '));
+        if (players.includes(target)) {
+            socket.emit('hunter shot', target);
+        } else {
+            alert('無效的目標！你失去了開槍機會。');
+            socket.emit('hunter shot', null);
+        }
+    });
+
+    socket.on('start vote', ({ candidates }) => {
+        console.log("投票");
+        statusH2.textContent = '白天投票時間';
+        gameControls.innerHTML = '';
+        candidates.forEach(p => {
+            if (p === yourName) return;
+            const btn = document.createElement('button');
+            btn.textContent = p;
+            btn.onclick = () => socket.emit('vote', p);
+            gameControls.appendChild(btn);
+        });
+    });
+
+    function translateRole(r) {
+        return {
+            seer: '預言家',
+            witch: '女巫',
+            hunter: '獵人',
+            idiot: '白癡',
+            werewolf: '狼人',
+            villager: '平民'
+        }[r] || r;
+    }
+  </script>
 </body>
 </html>

@@ -1,41 +1,69 @@
 const socket = io();
-let currentRoom = null;
+let myName = '';
+let mySeat = null;
 
 function joinRoom() {
-  const roomId = document.getElementById('room-input').value.trim();
-  if (roomId) {
-    enterRoom(roomId);
-  }
+  const name = document.getElementById('nameInput').value.trim();
+  const room = document.getElementById('roomInput').value.trim();
+  if (!name || !room) return;
+
+  myName = name;
+  socket.emit('join room', { roomId: room, name });
+
+  document.getElementById('roomTitle').innerText = `房號：${room}`;
 }
 
-function createRoom() {
-  const roomId = Math.random().toString(36).substr(2, 6);
-  enterRoom(roomId);
-}
+socket.on('name exists', () => {
+  document.getElementById('errorMsg').innerText = '名稱已存在，請換一個';
+});
 
-function enterRoom(roomId) {
-  currentRoom = roomId;
-  socket.emit('join room', roomId);
+socket.on('update seats', ({ seats }) => {
+  const seatContainer = document.getElementById('seatsContainer');
+  seatContainer.innerHTML = '';
 
-  document.getElementById('room-section').style.display = 'none';
-  document.getElementById('chat').style.display = 'block';
-  document.getElementById('room-title').innerText = `你在房間：${roomId}`;
-}
+  seats.forEach((occupant, i) => {
+    const div = document.createElement('div');
+    div.classList.add('seat');
+    if (occupant) {
+      div.textContent = occupant;
+      div.classList.add('occupied');
+      if (occupant === myName) {
+        div.classList.remove('occupied');
+        div.classList.add('me');
+        mySeat = i;
+        div.addEventListener('click', () => {
+          socket.emit('stand up');
+          mySeat = null;
+        });
+      }
+    } else {
+      div.textContent = '';
+      div.addEventListener('click', () => {
+        if (mySeat === null) {
+          socket.emit('sit down', i);
+        }
+      });
+    }
+    seatContainer.appendChild(div);
+  });
 
-// send message
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('chatroom').style.display = 'block';
+});
+
+// 聊天功能
 const form = document.getElementById('form');
 const input = document.getElementById('input');
 const messages = document.getElementById('messages');
 
 form.addEventListener('submit', e => {
   e.preventDefault();
-  if (input.value && currentRoom) {
-    socket.emit('chat message', { roomId: currentRoom, message: input.value });
+  if (input.value) {
+    socket.emit('chat message', input.value);
     input.value = '';
   }
 });
 
-// receive message
 socket.on('chat message', msg => {
   const item = document.createElement('li');
   item.textContent = msg;
