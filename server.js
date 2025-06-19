@@ -1,5 +1,3 @@
-// === server.js（狼人殺完整邏輯）===
-
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
@@ -8,13 +6,6 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 app.use(express.static('public'));
-
-const rolesList = [
-    'seer', 'witch', 'hunter', 'idiot',
-    'werewolf', 'werewolf', 'werewolf', 'werewolf',
-    'villager', 'villager', 'villager', 'villager'
-];
-
 const rooms = {};
 
 io.on('connection', socket => {
@@ -37,7 +28,9 @@ io.on('connection', socket => {
                 votes: {},
                 alive: {},
                 witchUsed: { save: false, poison: false },
-                dayCount: 0
+                dayCount: 0,
+                rolesConfig: null,
+                host: socket.id  
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -49,9 +42,19 @@ io.on('connection', socket => {
         socket.join(roomId);
         rooms[roomId].users[socket.id] = name;
         rooms[roomId].sockets[name] = socket;
+        if (socket.id === rooms[roomId].host) {
+            socket.emit('you are host');
+        }
         io.to(roomId).emit('update seats', {
             seats: rooms[roomId].seats
         });
+    });
+
+    socket.on('set roles config', (config) => {
+        const room = rooms[currentRoom];
+        if (!room || socket.id !== room.host) return;
+        room.rolesConfig = config;
+        socket.emit('chat message', '角色配置已更新');
     });
 
     socket.on('chat message', msg => {
@@ -92,9 +95,21 @@ io.on('connection', socket => {
         const room = rooms[currentRoom];
         if (!room || room.gameStarted) return;
 
+        let rolesList = [];
+        const config = room.rolesConfig || {
+            seer: 1, witch: 1, hunter: 1, idiot: 1,
+            werewolf: 4, villager: 4
+        };
+
+        for (const [role, count] of Object.entries(config)) {
+            for (let i = 0; i < count; i++) {
+                rolesList.push(role);
+            }
+        }
+        
         const players = room.seats.map((name, index) => ({ name, index })).filter(p => p.name);
-        if (players.length !== 12) {
-            socket.emit('chat message', '需要 12 人才能開始遊戲');
+        if (players.length !== rolesList.length) {
+            socket.emit('chat message', `目前入座人數為 ${players.length}，但角色總數為 ${rolesList.length}，無法開始遊戲`);
             return;
         }
 
@@ -102,6 +117,7 @@ io.on('connection', socket => {
         players.forEach((p, i) => {
             room.roles[p.name] = shuffledRoles[i];
             room.alive[p.name] = true;
+            console.log(`${p.name} 是 ${shuffledRoles[i]}`)
         });
 
         room.witchUsed = { save: false, poison: false };
@@ -150,7 +166,7 @@ io.on('connection', socket => {
 
     socket.on('night result', ({ type, target }) => {
         const room = rooms[currentRoom];
-        if (!room || !room.gameStarted) return;
+        if (!room || !room.gameStarted || room.nightActions.ends[playerName]) return;
         if (type === 'seer') {
             const role = room.roles[target];
             if (role === 'werewolf') {
@@ -168,6 +184,7 @@ io.on('connection', socket => {
                 room.roles[name] === 'werewolf' && room.alive[name]
             );
             const totalVotes = Object.values(room.nightActions.wolfVotes).reduce((a, b) => a + b, 0);
+            
             if (totalVotes === aliveWolves.length) {
                 let maxVotes = 0;
                 let candidates = [];
@@ -240,8 +257,9 @@ io.on('connection', socket => {
 
         io.to(roomId).emit('chat message', `第 ${room.dayCount} 天 天亮了，死亡名單：${deathList.join(', ') || '無人死亡'}`);
         checkGameEnd(roomId);
-        room.votes = {};
+        
         checkHunter(roomId, victim, () => {
+            room.votes = {};
             const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
             io.to(roomId).emit('start vote', { candidates });
         });
@@ -251,23 +269,23 @@ io.on('connection', socket => {
         const room = rooms[roomId];
         if (!room || !room.gameStarted) return;
         if (room.roles[victim] === 'hunter') {
-            const hunterSocketId = room.sockets[victim]?.id;
-            if (hunterSocketId) {
-                io.to(hunterSocketId).emit('hunter shoot', {
+            const hunterSocket = room.sockets[victim];
+            if (hunterSocket) {
+                room.hunterCallback = onDone;
+                hunterSocket.emit('hunter shoot', {
                     players: Object.keys(room.alive).filter(n => room.alive[n])
                 });
-                room.hunterCallback = onDone;
-                return;
             }
+        } else {
+            onDone();
         }
-        if (typeof onDone === 'function') onDone();
     }
 
     socket.on('hunter shot', target => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || room.roles[playerName] !== 'hunter') return;
 
-        if (target && room.alive[target]) {
+        if (target && target in room.alive && room.alive[target]) {
             room.alive[target] = false;
             io.to(currentRoom).emit('chat message', `${playerName} 在死前開槍射殺了 ${target}！`);
         }
@@ -287,6 +305,7 @@ io.on('connection', socket => {
             const result = mostFrequent(Object.values(room.votes));
             if (room.alive[result]) room.alive[result] = false;
             io.to(currentRoom).emit('chat message', `被投票處決的是：${result}`);
+            if (room.roles[result] === 'idiot') io.to(currentRoom).emit('chat message', `他是白癡`);
             checkGameEnd(currentRoom);
             checkHunter(currentRoom, result, () => {
                 startNightPhase(currentRoom);

@@ -33,6 +33,30 @@
 
     <div id="game-controls"></div>
 
+    <div id="roleConfig" class="hidden">
+    <h3>設定角色數量</h3>
+
+    <label for="seerNum">預言家</label>
+    <input id="seerNum" type="number" placeholder="預言家" value="1">
+
+    <label for="witchNum">女巫</label>
+    <input id="witchNum" type="number" placeholder="女巫" value="1">
+
+    <label for="hunterNum">獵人</label>
+    <input id="hunterNum" type="number" placeholder="獵人" value="1">
+
+    <label for="idiotNum">白癡</label>
+    <input id="idiotNum" type="number" placeholder="白癡" value="1">
+
+    <label for="werewolfNum">狼人</label>
+    <input id="werewolfNum" type="number" placeholder="狼人" value="4">
+
+    <label for="villagerNum">平民</label>
+    <input id="villagerNum" type="number" placeholder="平民" value="4">
+
+    <button id="submitRoles">送出角色設定</button>
+</div>
+
     <div id="chat"></div>
     <form id="messageForm">
       <input id="messageInput" autocomplete="off" placeholder="輸入訊息..." />
@@ -54,6 +78,7 @@
 
     let yourName = null;
     let yourRole = null;
+    let isHost = false;
 
     document.getElementById('joinBtn').onclick = () => {
         const room = document.getElementById('roomInput').value;
@@ -64,9 +89,31 @@
         gameScreen.classList.remove('hidden');
     };
 
+    document.getElementById('submitRoles').onclick = () => {
+        if (!isHost) {
+            alert('只有房主可以設定角色');
+            return;
+        }
+        const config = {
+            seer: parseInt(document.getElementById('seerNum').value),
+            witch: parseInt(document.getElementById('witchNum').value),
+            hunter: parseInt(document.getElementById('hunterNum').value),
+            idiot: parseInt(document.getElementById('idiotNum').value),
+            werewolf: parseInt(document.getElementById('werewolfNum').value),
+            villager: parseInt(document.getElementById('villagerNum').value)
+        };
+        socket.emit('set roles config', config);
+    };
+
     socket.on('name exists', () => {
         alert('名稱已被使用');
         location.reload();
+    });
+
+    socket.on('you are host', () => {
+        isHost = true;
+        console.log('你是房主');
+        document.getElementById('roleConfig').classList.remove('hidden');
     });
 
     socket.on('update seats', ({ seats }) => {
@@ -142,11 +189,11 @@
             statusH2.textContent = '女巫行動';
             let noSave = true;
             const btn0 = document.createElement('button');
-            btn.textContent = `放棄用藥`;
-            btn.onclick = () => {
+            btn0.textContent = `放棄用藥`;
+            btn0.onclick = () => {
                 socket.emit('night result', { type: 'witch-skip' });
             };
-            gameControls.appendChild(btn);
+            gameControls.appendChild(btn0);
             if (!used.save) {
                 const btn = document.createElement('button');
                 btn.textContent = `${victim}死了，要救嗎`;
@@ -176,18 +223,13 @@
     });
 
     socket.on('hunter shoot', ({ players }) => {
-        const shouldShoot = confirm('你死了，你是獵人！要不要開槍？');
-        if (!shouldShoot) {
-            socket.emit('hunter shot', null);
-            return;
-        }
-        const target = prompt('請輸入你要開槍的對象（名稱）：\n' + players.join(', '));
-        if (players.includes(target)) {
+        const btn = document.createElement('button');
+        btn.textContent = '開槍嗎';
+        btn.onclick = () => {
+            const target = prompt('請輸入你要開槍的對象（名稱）');
             socket.emit('hunter shot', target);
-        } else {
-            alert('無效的目標！你失去了開槍機會。');
-            socket.emit('hunter shot', null);
-        }
+        };
+        gameControls.appendChild(btn);
     });
 
     socket.on('start vote', ({ candidates }) => {
