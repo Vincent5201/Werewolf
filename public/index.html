@@ -46,6 +46,9 @@
 
     <label for="idiotNum">白癡</label>
     <input id="idiotNum" type="number" placeholder="白癡" value="1">
+    
+    <label for="guardNum">守衛</label>
+    <input id="guardNum" type="number" placeholder="守衛" value="0">
 
     <label for="werewolfNum">狼人</label>
     <input id="werewolfNum" type="number" placeholder="狼人" value="4">
@@ -94,7 +97,8 @@
             hunter: parseInt(document.getElementById('hunterNum').value),
             idiot: parseInt(document.getElementById('idiotNum').value),
             werewolf: parseInt(document.getElementById('werewolfNum').value),
-            villager: parseInt(document.getElementById('villagerNum').value)
+            villager: parseInt(document.getElementById('villagerNum').value),
+            guard: parseInt(document.getElementById('guardNum').value)
         };
         socket.emit('set roles config', config);
     };
@@ -154,7 +158,7 @@
         alert('你的狼人隊友有：' + teammates.join('、'));
     });
 
-    socket.on('night action', ({ type, players, used, victim }) => {
+    socket.on('night action', ({ type, players, used, victim, lastTarget }) => {
         gameControls.innerHTML = '';
         if (type === 'seer') {
             statusH2.textContent = '預言家，請選擇要查驗的對象';
@@ -204,6 +208,16 @@
                 };
                 gameControls.appendChild(btn2);
             }
+        } else if (type === 'guard') {
+            statusH2.textContent = '守衛，請選擇要守護的對象';
+            players.forEach(p => {
+                if (p === yourName) return;
+                if (p === lastTarget) return;
+                const btn = document.createElement('button');
+                btn.textContent = p;
+                btn.onclick = () => socket.emit('night result', { type: 'guard', target: p });
+                gameControls.appendChild(btn);
+            });
         }
     });
 
@@ -241,7 +255,8 @@
             hunter: '獵人',
             idiot: '白癡',
             werewolf: '狼人',
-            villager: '平民'
+            villager: '平民',
+            guard: '守衛'
         }[r] || r;
     }
   </script>

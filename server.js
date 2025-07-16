@@ -30,7 +30,7 @@ io.on('connection', socket => {
                 witchUsed: { save: false, poison: false },
                 dayCount: 0,
                 rolesConfig: null,
-                host: socket.id  
+                host: socket.id
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -123,6 +123,9 @@ io.on('connection', socket => {
         room.witchUsed = { save: false, poison: false };
         room.dayCount = 0;
         room.gameStarted = true;
+        room.nightActions.guard = null;
+        room.nightActions.save = null;
+        room.nightActions.poison = null;
         
         for (const [socketId, name] of Object.entries(room.users)) {
             const role = room.roles[name];
@@ -146,7 +149,8 @@ io.on('connection', socket => {
                 socket.emit('werewolf teammates', werewolves.filter(n => n !== name));
             }
         }
-
+        room.nightActions.save = null;
+        room.nightActions.poison = null;
         for (const [socketId, name] of Object.entries(room.users)) {
             if (!room.alive[name]) continue;
             const role = room.roles[name];
@@ -156,6 +160,9 @@ io.on('connection', socket => {
             } else if (role === 'werewolf') {
                 const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
                 io.to(socketId).emit('night action', { type: 'wolf', players: aliveNames });
+            } else if(role === 'guard') {
+                const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
+                io.to(socketId).emit('night action', { type: 'guard', players: aliveNames, lastTarget: room.nightActions.guard});
             } else if(role === 'witch') {
                 continue;
             } else {
@@ -174,7 +181,6 @@ io.on('connection', socket => {
             } else {
                 socket.emit('seer result', { target, role:'good'});
             }
-            room.nightActions.ends[playerName] = true;
         } else if (type === 'wolf') {
             if (!room.nightActions.wolfVotes[target]) {
                 room.nightActions.wolfVotes[target] = 0;
@@ -211,18 +217,16 @@ io.on('connection', socket => {
                     });
                 }
             }
-            room.nightActions.ends[playerName] = true;
         } else if (type === 'witch-save' && !room.witchUsed.save) {
-            room.nightActions.victim = null;
+            room.nightActions.save = target;
             room.witchUsed.save = true;
-            room.nightActions.ends[playerName] = true;
         } else if (type === 'witch-poison' && !room.witchUsed.poison) {
             room.nightActions.poison = target;
             room.witchUsed.poison = true;
-            room.nightActions.ends[playerName] = true;
-        } else if (type === 'witch-skip' || type === 'witch-save' || type === 'witch-poison') {
-            room.nightActions.ends[playerName] = true;
-        } 
+        } else if (type === 'guard') {
+            room.nightActions.guard = target;
+        }
+        room.nightActions.ends[playerName] = true;
         checkNightEnd(currentRoom);
     });
 
@@ -242,8 +246,20 @@ io.on('connection', socket => {
         if (!room || !room.gameStarted) return;
         room.dayCount++;
 
-        const victim = room.nightActions.victim;
+        let victim = room.nightActions.victim;
         const poisoned = room.nightActions.poison;
+        const guard = room.nightActions.guard;
+        const save = room.nightActions.save;
+
+        if (save && guard) {
+            if (guard !== save) {
+                victim = null;
+            }
+        } else if (save) {
+            victim = null;
+        } else if (guard && guard === victim) {
+            victim = null;
+        }
 
         let deathList = [];
         if (victim && room.alive[victim]) {
