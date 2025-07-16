@@ -12,7 +12,6 @@
     .seat.taken { background: #555; }
     .seat.you { background: green; }
     #chat { margin-top: 20px; max-height: 200px; overflow-y: auto; border: 1px solid #888; padding: 10px; background: #111; }
-    #messageForm { margin-top: 10px; }
     #game-controls button { margin: 5px; }
   </style>
 </head>
@@ -58,10 +57,6 @@
 </div>
 
     <div id="chat"></div>
-    <form id="messageForm">
-      <input id="messageInput" autocomplete="off" placeholder="輸入訊息..." />
-      <button>送出</button>
-    </form>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -71,7 +66,6 @@
     const gameScreen = document.getElementById('gameScreen');
     const seatsDiv = document.getElementById('seats');
     const chatDiv = document.getElementById('chat');
-    const messageForm = document.getElementById('messageForm');
     const messageInput = document.getElementById('messageInput');
     const statusH2 = document.getElementById('status');
     const gameControls = document.getElementById('game-controls');
@@ -140,16 +134,11 @@
         const line = document.createElement('div');
         line.textContent = msg;
         chatDiv.appendChild(line);
+        while (chatDiv.children.length > 5) {
+            chatDiv.removeChild(chatDiv.firstChild);
+        }
         chatDiv.scrollTop = chatDiv.scrollHeight;
     });
-
-    messageForm.onsubmit = e => {
-        e.preventDefault();
-        if (messageInput.value) {
-            socket.emit('chat message', messageInput.value);
-            messageInput.value = '';
-        }
-    };
 
     socket.on('your role', role => {
         yourRole = role;
@@ -177,7 +166,7 @@
                 gameControls.appendChild(btn);
             });
         } else if (type === 'wolf') {
-            statusH2.textContent = '狼人，請投票要殺的人';
+            statusH2.textContent = '狼人，請投票要殺的人(只能投一次，不要亂點)';
             players.forEach(p => {
                 if (p === yourName) return;
                 const btn = document.createElement('button');
@@ -224,9 +213,9 @@
 
     socket.on('hunter shoot', ({ players }) => {
         const btn = document.createElement('button');
-        btn.textContent = '開槍嗎';
+        btn.textContent = '要開槍嗎';
         btn.onclick = () => {
-            const target = prompt('請輸入你要開槍的對象（名稱）');
+            const target = prompt('請輸入你要開槍的對象（名稱），悶槍則隨意輸入');
             socket.emit('hunter shot', target);
         };
         gameControls.appendChild(btn);

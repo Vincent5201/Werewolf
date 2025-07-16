@@ -52,7 +52,7 @@ io.on('connection', socket => {
 
     socket.on('set roles config', (config) => {
         const room = rooms[currentRoom];
-        if (!room || socket.id !== room.host) return;
+        if (!room || socket.id !== room.host || room.gameStarted) return;
         room.rolesConfig = config;
         socket.emit('chat message', '角色配置已更新');
     });
