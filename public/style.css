@@ -1,29 +1,114 @@
 body {
-  font-family: Arial;
-  padding: 20px;
+  font-family: sans-serif;
+  background: #222;
+  color: #fff;
+  text-align: center;
 }
+
+.hidden {
+  display: none;
+}
+
 .seats {
   display: grid;
-  grid-template-columns: repeat(4, 100px);
-  gap: 15px;
+  grid-template-columns: repeat(4, 80px);
+  gap: 10px;
+  justify-content: center;
   margin-top: 20px;
 }
+
 .seat {
-  width: 100px;
-  height: 100px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  background-color: gray;
-  color: white;
+  background: gray;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-weight: bold;
 }
-.seat.occupied {
-  background-color: darkslategray;
-  cursor: not-allowed;
+
+.seat.taken {
+  background: #555;
 }
-.seat.me {
+
+.seat.you {
+  background: green;
+}
+
+#chat {
+  margin-top: 20px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #888;
+  padding: 10px;
+  background: #111;
+}
+
+#game-controls button {
+  margin: 5px;
+}
+
+/* 💡 新增的左右排版和角色設定樣式 */
+.mainArea {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 60px;
+  margin-top: 20px;
+}
+
+.centerArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#roleConfig {
+  background: #333;
+  padding: 15px;
+  border-radius: 10px;
+  text-align: left;
+  box-shadow: 0 0 10px #000;
+  color: white;
+  min-width: 200px;
+}
+
+#roleConfig h3 {
+  margin-top: 0;
+  color: #fff;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.role-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.role-row label {
+  margin-right: 10px;
+  color: #fff;
+  width: 80px;
+  display: inline-block;
+}
+
+.role-row input {
+  width: 60px;
+  padding: 4px;
+  background-color: #222;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 4px;
+}
+
+#submitRoles {
+  margin-top: 10px;
+  padding: 6px 12px;
   background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
 }

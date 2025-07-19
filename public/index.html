@@ -4,16 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>狼人殺遊戲</title>
-  <style>
-    body { font-family: sans-serif; background: #222; color: #fff; text-align: center; }
-    .hidden { display: none; }
-    .seats { display: grid; grid-template-columns: repeat(4, 80px); gap: 10px; justify-content: center; margin-top: 20px; }
-    .seat { width: 80px; height: 80px; border-radius: 50%; background: gray; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-    .seat.taken { background: #555; }
-    .seat.you { background: green; }
-    #chat { margin-top: 20px; max-height: 200px; overflow-y: auto; border: 1px solid #888; padding: 10px; background: #111; }
-    #game-controls button { margin: 5px; }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <h1>狼人殺</h1>
@@ -27,40 +18,57 @@
   <div id="gameScreen" class="hidden">
     <h2 id="status">等待開始...</h2>
 
-    <div class="seats" id="seats"></div>
-    <button id="startBtn">開始遊戲</button>
+    <div class="mainArea">
+        <div class="centerArea">
+            <div class="seats" id="seats"></div>
+            <button id="startBtn">開始遊戲</button>
+            <div id="game-controls"></div>
+        </div>
 
-    <div id="game-controls"></div>
+        <div id="roleConfig" class="hidden">
+        <h3>設定角色數量</h3>
 
-    <div id="roleConfig" class="hidden">
-    <h3>設定角色數量</h3>
+        <div class="role-row">
+            <label for="seerNum">預言家</label>
+            <input id="seerNum" type="number" placeholder="預言家" value="1">
+        </div>
 
-    <label for="seerNum">預言家</label>
-    <input id="seerNum" type="number" placeholder="預言家" value="1">
+        <div class="role-row">
+            <label for="witchNum">女巫</label>
+            <input id="witchNum" type="number" placeholder="女巫" value="1">
+        </div>
 
-    <label for="witchNum">女巫</label>
-    <input id="witchNum" type="number" placeholder="女巫" value="1">
+        <div class="role-row">
+            <label for="hunterNum">獵人</label>
+            <input id="hunterNum" type="number" placeholder="獵人" value="1">
+        </div>
 
-    <label for="hunterNum">獵人</label>
-    <input id="hunterNum" type="number" placeholder="獵人" value="1">
+        <div class="role-row">
+            <label for="idiotNum">白癡</label>
+            <input id="idiotNum" type="number" placeholder="白癡" value="1">
+        </div>
 
-    <label for="idiotNum">白癡</label>
-    <input id="idiotNum" type="number" placeholder="白癡" value="1">
-    
-    <label for="guardNum">守衛</label>
-    <input id="guardNum" type="number" placeholder="守衛" value="0">
+        <div class="role-row">
+            <label for="guardNum">守衛</label>
+            <input id="guardNum" type="number" placeholder="守衛" value="0">
+        </div>
 
-    <label for="werewolfNum">狼人</label>
-    <input id="werewolfNum" type="number" placeholder="狼人" value="4">
+        <div class="role-row">
+            <label for="werewolfNum">狼人</label>
+            <input id="werewolfNum" type="number" placeholder="狼人" value="4">
+        </div>
 
-    <label for="villagerNum">平民</label>
-    <input id="villagerNum" type="number" placeholder="平民" value="4">
+        <div class="role-row">
+            <label for="villagerNum">平民</label>
+            <input id="villagerNum" type="number" placeholder="平民" value="4">
+        </div>
 
-    <button id="submitRoles">送出角色設定</button>
-</div>
-
+        <button id="submitRoles">送出角色設定</button>
+        </div>
+    </div>
     <div id="chat"></div>
   </div>
+
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
