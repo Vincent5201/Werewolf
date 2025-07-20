@@ -142,7 +142,7 @@ io.on('connection', socket => {
         room.nightActions = { wolfVotes: {}, seerCheck: null, victim: null, poison: null, ends: {}};
         io.to(roomId).emit('night phase');
 
-        const werewolves = Object.keys(room.roles).filter(name => room.roles[name] === 'werewolf');
+        const werewolves = Object.keys(room.roles).filter(name => (room.roles[name] === 'werewolf' || room.roles[name] === 'wolfhunter'));
         for (const name of werewolves) {
             const socket = room.sockets[name];
             if (socket) {
@@ -154,12 +154,9 @@ io.on('connection', socket => {
         for (const [socketId, name] of Object.entries(room.users)) {
             if (!room.alive[name]) continue;
             const role = room.roles[name];
-            if (role === 'seer') {
+            if (role === 'seer' || role === 'werewolf' || role === 'wolfhunter') {
                 const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
-                io.to(socketId).emit('night action', { type: 'seer', players: aliveNames });
-            } else if (role === 'werewolf') {
-                const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
-                io.to(socketId).emit('night action', { type: 'wolf', players: aliveNames });
+                io.to(socketId).emit('night action', { type: role, players: aliveNames });
             } else if(role === 'guard') {
                 const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
                 io.to(socketId).emit('night action', { type: 'guard', players: aliveNames, lastTarget: room.nightActions.guard});
@@ -176,18 +173,18 @@ io.on('connection', socket => {
         if (!room || !room.gameStarted || room.nightActions.ends[playerName]) return;
         if (type === 'seer') {
             const role = room.roles[target];
-            if (role === 'werewolf') {
+            if (role === 'werewolf' || role === 'wolfhunter') {
                 socket.emit('seer result', { target, role:'bad'});
             } else {
                 socket.emit('seer result', { target, role:'good'});
             }
-        } else if (type === 'wolf') {
+        } else if (type === 'wolf' || type === 'wolfhunter') {
             if (!room.nightActions.wolfVotes[target]) {
                 room.nightActions.wolfVotes[target] = 0;
             }
             room.nightActions.wolfVotes[target]++;
             const aliveWolves = Object.keys(room.roles).filter(name =>
-                room.roles[name] === 'werewolf' && room.alive[name]
+                (room.roles[name] === 'werewolf' || room.roles[name] === 'wolfhunter') && room.alive[name]
             );
             const totalVotes = Object.values(room.nightActions.wolfVotes).reduce((a, b) => a + b, 0);
             
@@ -284,7 +281,7 @@ io.on('connection', socket => {
     function checkHunter(roomId, victim, onDone) {
         const room = rooms[roomId];
         if (!room || !room.gameStarted) return;
-        if (room.roles[victim] === 'hunter') {
+        if (room.roles[victim] === 'hunter' || room.roles[victim] === 'wolfhunter') {
             const hunterSocket = room.sockets[victim];
             if (hunterSocket) {
                 room.hunterCallback = onDone;
@@ -293,13 +290,13 @@ io.on('connection', socket => {
                 });
             }
         } else {
-            onDone();
+            setTimeout(() => onDone(), 3000);
         }
     }
 
     socket.on('hunter shot', target => {
         const room = rooms[currentRoom];
-        if (!room || !room.gameStarted || room.roles[playerName] !== 'hunter') return;
+        if (!room || !room.gameStarted) return;
 
         if (target && target in room.alive && room.alive[target]) {
             room.alive[target] = false;
@@ -332,7 +329,7 @@ io.on('connection', socket => {
     function checkGameEnd(roomId) {
         const room = rooms[roomId];
         const aliveRoles = Object.entries(room.alive).filter(([name, alive]) => alive).map(([name]) => room.roles[name]);
-        const wolves = aliveRoles.filter(r => r === 'werewolf').length;
+        const wolves = aliveRoles.filter(r => (r === 'werewolf' || r === 'wolfhunter')).length;
         const villager = aliveRoles.filter(r => r === 'villager').length;
         const god = aliveRoles.length - wolves - villager;
 

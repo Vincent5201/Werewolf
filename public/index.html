@@ -54,6 +54,11 @@
         </div>
 
         <div class="role-row">
+            <label for="wolfhunterNum">狼王</label>
+            <input id="wolfhunterNum" type="number" placeholder="狼人" value="0">
+        </div>
+
+        <div class="role-row">
             <label for="werewolfNum">狼人</label>
             <input id="werewolfNum" type="number" placeholder="狼人" value="4">
         </div>
@@ -106,7 +111,8 @@
             idiot: parseInt(document.getElementById('idiotNum').value),
             werewolf: parseInt(document.getElementById('werewolfNum').value),
             villager: parseInt(document.getElementById('villagerNum').value),
-            guard: parseInt(document.getElementById('guardNum').value)
+            guard: parseInt(document.getElementById('guardNum').value),
+            wolfhunter: parseInt(document.getElementById('wolfhunterNum').value)
         };
         socket.emit('set roles config', config);
     };
@@ -177,8 +183,12 @@
                 btn.onclick = () => socket.emit('night result', { type: 'seer', target: p });
                 gameControls.appendChild(btn);
             });
-        } else if (type === 'wolf') {
-            statusH2.textContent = '狼人，請投票要殺的人(只能投一次，不要亂點)';
+        } else if (type === 'wolf' || type === 'wolfhunter') {
+            if (type === 'wolfhunter') {
+                statusH2.textContent = '狼王，請投票要殺的人(只能投一次，不要亂點)';
+            } else {
+                statusH2.textContent = '狼人，請投票要殺的人(只能投一次，不要亂點)';
+            }
             players.forEach(p => {
                 if (p === yourName) return;
                 const btn = document.createElement('button');
@@ -264,7 +274,8 @@
             idiot: '白癡',
             werewolf: '狼人',
             villager: '平民',
-            guard: '守衛'
+            guard: '守衛',
+            wolfhunter: '狼王'
         }[r] || r;
     }
   </script>
