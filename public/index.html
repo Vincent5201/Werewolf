@@ -183,7 +183,7 @@
                 btn.onclick = () => socket.emit('night result', { type: 'seer', target: p });
                 gameControls.appendChild(btn);
             });
-        } else if (type === 'wolf' || type === 'wolfhunter') {
+        } else if (type === 'werewolf' || type === 'wolfhunter') {
             if (type === 'wolfhunter') {
                 statusH2.textContent = '狼王，請投票要殺的人(只能投一次，不要亂點)';
             } else {
@@ -193,7 +193,7 @@
                 if (p === yourName) return;
                 const btn = document.createElement('button');
                 btn.textContent = p;
-                btn.onclick = () => socket.emit('night result', { type: 'wolf', target: p });
+                btn.onclick = () => socket.emit('night result', { type: 'werewolf', target: p });
                 gameControls.appendChild(btn);
             });
         } else if (type === 'witch') {
@@ -253,8 +253,17 @@
         gameControls.appendChild(btn);
     });
 
-    socket.on('start vote', ({ candidates }) => {
-        console.log("投票");
+    socket.on('start talking', ({ candidates }) => {
+        //這顆結束發言的按鈕沒有出現
+        statusH2.textContent = '白天發言時間';
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '結束發言';
+        btn.onclick = () => socket.emit('end talking', yourName);
+        gameControls.appendChild(btn);
+    });
+
+    socket.on('start voting', ({ candidates }) => {
         statusH2.textContent = '白天投票時間';
         gameControls.innerHTML = '';
         candidates.forEach(p => {

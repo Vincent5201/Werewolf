@@ -30,7 +30,8 @@ io.on('connection', socket => {
                 witchUsed: { save: false, poison: false },
                 dayCount: 0,
                 rolesConfig: null,
-                host: socket.id
+                host: socket.id,
+                talked: {}
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -126,6 +127,7 @@ io.on('connection', socket => {
         room.nightActions.guard = null;
         room.nightActions.save = null;
         room.nightActions.poison = null;
+        room.talked = {};
         
         for (const [socketId, name] of Object.entries(room.users)) {
             const role = room.roles[name];
@@ -154,9 +156,15 @@ io.on('connection', socket => {
         for (const [socketId, name] of Object.entries(room.users)) {
             if (!room.alive[name]) continue;
             const role = room.roles[name];
-            if (role === 'seer' || role === 'werewolf' || role === 'wolfhunter') {
+            if (role === 'seer') {
                 const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
-                io.to(socketId).emit('night action', { type: role, players: aliveNames });
+                io.to(socketId).emit('night action', { type: 'seer', players: aliveNames });
+            } else if (role === 'werewolf') {
+                const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
+                io.to(socketId).emit('night action', { type: 'werewolf', players: aliveNames });
+            } else if (role === 'wolfhunter') {
+                const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
+                io.to(socketId).emit('night action', { type: 'wolfhunter', players: aliveNames });
             } else if(role === 'guard') {
                 const aliveNames = Object.keys(room.alive).filter(n => room.alive[n]);
                 io.to(socketId).emit('night action', { type: 'guard', players: aliveNames, lastTarget: room.nightActions.guard});
@@ -178,7 +186,7 @@ io.on('connection', socket => {
             } else {
                 socket.emit('seer result', { target, role:'good'});
             }
-        } else if (type === 'wolf' || type === 'wolfhunter') {
+        } else if (type === 'werewolf' || type === 'wolfhunter') {
             if (!room.nightActions.wolfVotes[target]) {
                 room.nightActions.wolfVotes[target] = 0;
             }
@@ -274,7 +282,7 @@ io.on('connection', socket => {
         checkHunter(roomId, victim, () => {
             room.votes = {};
             const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
-            io.to(roomId).emit('start vote', { candidates });
+            io.to(roomId).emit('start talking', { candidates });
         });
     }
 
@@ -306,6 +314,16 @@ io.on('connection', socket => {
         if (typeof room.hunterCallback === 'function') {
             room.hunterCallback();
             room.hunterCallback = null;
+        }
+    });
+
+    socket.on('end talking', playerName => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || !room.alive[playerName]) return;
+        room.talked[playerName] = true;
+        const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
+        if (Object.keys(room.talked).length === candidates.length) {
+            io.to(currentRoom).emit('start voting', { candidates });
         }
     });
 
