@@ -1,3 +1,4 @@
+const { table } = require('console');
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
@@ -31,7 +32,8 @@ io.on('connection', socket => {
                 dayCount: 0,
                 rolesConfig: null,
                 host: socket.id,
-                talked: {}
+                firstTalk: null,
+                talking: null
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -127,7 +129,6 @@ io.on('connection', socket => {
         room.nightActions.guard = null;
         room.nightActions.save = null;
         room.nightActions.poison = null;
-        room.talked = {};
         
         for (const [socketId, name] of Object.entries(room.users)) {
             const role = room.roles[name];
@@ -278,11 +279,24 @@ io.on('connection', socket => {
 
         io.to(roomId).emit('chat message', `第 ${room.dayCount} 天 天亮了，死亡名單：${deathList.join(', ') || '無人死亡'}`);
         checkGameEnd(roomId);
-        
+
+        if (deathList.length === 1) {
+            room.firstTalk = room.seats.indexOf(deathList[0]);
+            while (!room.alive[room.seats[room.firstTalk]]) {
+                room.firstTalk++;
+                room.firstTalk %= 12;
+            }
+        } else {
+            const alivePlayers = Object.keys(room.alive).filter(name => room.alive[name]);
+            const randomIndex = Math.floor(Math.random() * alivePlayers.length);
+            room.firstTalk = room.seats.indexOf(alivePlayers[randomIndex]);
+        }
+
+        room.talking = room.firstTalk;
         checkHunter(roomId, victim, () => {
             room.votes = {};
-            const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
-            io.to(roomId).emit('start talking', { candidates });
+            const tmp = room.seats[room.talking];
+            io.to(roomId).emit('start talking', { talking: tmp });
         });
     }
 
@@ -319,11 +333,19 @@ io.on('connection', socket => {
 
     socket.on('end talking', playerName => {
         const room = rooms[currentRoom];
-        if (!room || !room.gameStarted || !room.alive[playerName]) return;
-        room.talked[playerName] = true;
-        const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
-        if (Object.keys(room.talked).length === candidates.length) {
+        if (!room || !room.gameStarted || playerName != room.seats[room.talking]) return;
+        room.talking++;
+        room.talking %= 12;
+        while (!room.alive[room.seats[room.talking]]) {
+            room.talking++;
+            room.talking %= 12;
+        }
+        if (room.talking == room.firstTalk) {
+            const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
             io.to(currentRoom).emit('start voting', { candidates });
+        } else {
+            const name = room.seats[room.talking];
+            io.to(currentRoom).emit('start talking', { talking: name });
         }
     });
 

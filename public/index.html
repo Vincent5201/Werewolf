@@ -229,7 +229,6 @@
         } else if (type === 'guard') {
             statusH2.textContent = '守衛，請選擇要守護的對象';
             players.forEach(p => {
-                if (p === yourName) return;
                 if (p === lastTarget) return;
                 const btn = document.createElement('button');
                 btn.textContent = p;
@@ -253,9 +252,8 @@
         gameControls.appendChild(btn);
     });
 
-    socket.on('start talking', ({ candidates }) => {
-        //這顆結束發言的按鈕沒有出現
-        statusH2.textContent = '白天發言時間';
+    socket.on('start talking', ({ talking }) => {
+        statusH2.textContent = `白天發言時間, ${talking} 發言`;
         gameControls.innerHTML = '';
         const btn = document.createElement('button');
         btn.textContent = '結束發言';
