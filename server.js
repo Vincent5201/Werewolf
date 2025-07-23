@@ -194,7 +194,7 @@ io.on('connection', socket => {
                 if (witchSocket && room.alive[witchName]) {
                     witchSocket.emit('night action', {
                         type: 'witch',
-                        victim: victim,
+                        victim: result,
                         players: Object.keys(room.alive).filter(n => room.alive[n]),
                         used: room.witchUsed
                     });
@@ -256,7 +256,39 @@ io.on('connection', socket => {
 
         io.to(roomId).emit('chat message', `第 ${room.dayCount} 天 天亮了，死亡名單：${deathList.join(', ') || '無人死亡'}`);
         checkGameEnd(roomId);
+        if (room.dayCount === 1 && deathList.length > 0) {
+            room.D1LastWord = deathList;
+            room.D1LastWordIdx = 0;
+            room.callback = () => stratTalking(roomId, victim, deathList);
+            io.to(roomId).emit('D1 last words', { talking: room.D1LastWord[0] });
+        } else {
+            stratTalking(roomId, victim, deathList);
+        }
+    }
 
+    socket.on('end D1 last words', playerName => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName != room.D1LastWord[room.D1LastWordIdx]) return;
+        room.D1LastWordIdx++;
+        if (room.D1LastWordIdx === room.D1LastWord.length) {
+            if (typeof room.callback === 'function') {
+                room.callback();
+                room.callback = null;
+            } else {
+                const alivePlayers = Object.keys(room.alive).filter(name => room.alive[name]);
+                const randomIndex = Math.floor(Math.random() * alivePlayers.length);
+                room.firstTalk = room.seats.indexOf(alivePlayers[randomIndex]);
+                room.talking = room.firstTalk;
+                const tmp = room.seats[room.talking];
+                io.to(currentRoom).emit('start talking', { talking: tmp });
+            }
+        } else {
+            io.to(currentRoom).emit('D1 last words', { talking: room.D1LastWord[room.D1LastWordIdx] });
+        }
+    });
+
+    function stratTalking(roomId, victim, deathList) {
+        const room = rooms[roomId];
         if (deathList.length === 1) {
             room.firstTalk = room.seats.indexOf(deathList[0]);
             while (!room.alive[room.seats[room.firstTalk]]) {
@@ -279,7 +311,7 @@ io.on('connection', socket => {
     function checkHunter(roomId, victim, onDone) {
         const room = rooms[roomId];
         if (!room || !room.gameStarted) return;
-        if (room.roles[victim] === 'hunter' || room.roles[victim] === 'wolfhunter') {
+        if (victim !== null && (room.roles[victim] === 'hunter' || room.roles[victim] === 'wolfhunter')) {
             const hunterSocket = room.sockets[victim];
             if (hunterSocket) {
                 room.callback = onDone;
@@ -299,9 +331,11 @@ io.on('connection', socket => {
         if (target && target in room.alive && room.alive[target]) {
             room.alive[target] = false;
             io.to(currentRoom).emit('chat message', `${playerName} 在死前開槍射殺了 ${target}！`);
-        }
-        checkGameEnd(currentRoom);
-        if (typeof room.callback === 'function') {
+            checkGameEnd(currentRoom);
+            room.D1LastWord = [target];
+            room.D1LastWordIdx = 0;
+            io.to(currentRoom).emit('D1 last words', { talking: room.D1LastWord[0] });
+        } else {
             room.callback();
             room.callback = null;
         }
@@ -377,8 +411,7 @@ io.on('connection', socket => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || playerName != room.debate[room.debateIdx]) return;
         room.debateIdx++;
-        room.debateIdx %= room.debate.length;
-        if (room.debateIdx === 0) {
+        if (room.debateIdx === room.debate.length) {
             room.votes = {};
             io.to(currentRoom).emit('start voting', { candidates: room.debate });
         } else {

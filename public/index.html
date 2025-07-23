@@ -210,7 +210,7 @@
                 btn.onclick = () => {
                     const target = prompt('輸入1表示救');
                     if (target == 1) {
-                        socket.emit('night result', { type: 'witch-save' });
+                        socket.emit('night result', { type: 'witch-save', target: victim });
                         noSave = false;
                     } else {
                         socket.emit('night result', { type: 'witch-skip' });
@@ -279,6 +279,15 @@
         const btn = document.createElement('button');
         btn.textContent = '結束發言';
         btn.onclick = () => socket.emit('end last words', yourName);
+        gameControls.appendChild(btn);
+    });
+
+    socket.on('D1 last words', ({ talking }) => {
+        statusH2.textContent = `遺言時間, ${talking} 發言`;
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '結束發言';
+        btn.onclick = () => socket.emit('end D1 last words', yourName);
         gameControls.appendChild(btn);
     });
 
