@@ -273,6 +273,15 @@
         });
     });
 
+    socket.on('last words', ({ talking }) => {
+        statusH2.textContent = `遺言時間, ${talking} 發言`;
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '結束發言';
+        btn.onclick = () => socket.emit('end last words', yourName);
+        gameControls.appendChild(btn);
+    });
+
     function translateRole(r) {
         return {
             seer: '預言家',

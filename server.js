@@ -33,7 +33,9 @@ io.on('connection', socket => {
                 rolesConfig: null,
                 host: socket.id,
                 firstTalk: null,
-                talking: null
+                talking: null,
+                callback: null,
+                lastWord: null
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -306,7 +308,7 @@ io.on('connection', socket => {
         if (room.roles[victim] === 'hunter' || room.roles[victim] === 'wolfhunter') {
             const hunterSocket = room.sockets[victim];
             if (hunterSocket) {
-                room.hunterCallback = onDone;
+                room.callback = onDone;
                 hunterSocket.emit('hunter shoot', {
                     players: Object.keys(room.alive).filter(n => room.alive[n])
                 });
@@ -325,9 +327,9 @@ io.on('connection', socket => {
             io.to(currentRoom).emit('chat message', `${playerName} 在死前開槍射殺了 ${target}！`);
         }
         checkGameEnd(currentRoom);
-        if (typeof room.hunterCallback === 'function') {
-            room.hunterCallback();
-            room.hunterCallback = null;
+        if (typeof room.callback === 'function') {
+            room.callback();
+            room.callback = null;
         }
     });
 
@@ -360,11 +362,19 @@ io.on('connection', socket => {
             io.to(currentRoom).emit('chat message', `被投票處決的是：${result}`);
             if (room.roles[result] === 'idiot') io.to(currentRoom).emit('chat message', `他是白癡`);
             checkGameEnd(currentRoom);
-            checkHunter(currentRoom, result, () => {
-                startNightPhase(currentRoom);
-            });
+            room.lastWord = result;
+            io.to(currentRoom).emit('last words', { talking: result });
         }
     });
+
+    socket.on('end last words', playerName => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName != room.lastWord) return;
+        checkHunter(currentRoom, playerName, () => {
+            startNightPhase(currentRoom);
+        });
+    });
+
 
     function checkGameEnd(roomId) {
         const room = rooms[roomId];
