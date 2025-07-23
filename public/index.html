@@ -185,9 +185,9 @@
             });
         } else if (type === 'werewolf' || type === 'wolfhunter') {
             if (type === 'wolfhunter') {
-                statusH2.textContent = '狼王，請投票要殺的人(只能投一次，不要亂點)';
+                statusH2.textContent = '狼王，請投票要殺的人(只能按一次，不要亂點)';
             } else {
-                statusH2.textContent = '狼人，請投票要殺的人(只能投一次，不要亂點)';
+                statusH2.textContent = '狼人，請投票要殺的人(只能按一次，不要亂點)';
             }
             players.forEach(p => {
                 const btn = document.createElement('button');
@@ -212,6 +212,8 @@
                     if (target == 1) {
                         socket.emit('night result', { type: 'witch-save' });
                         noSave = false;
+                    } else {
+                        socket.emit('night result', { type: 'witch-skip' });
                     }
                 };
                 gameControls.appendChild(btn);
@@ -220,7 +222,7 @@
                 const btn2 = document.createElement('button');
                 btn2.textContent = '使用毒藥殺人';
                 btn2.onclick = () => {
-                    const target = prompt('要毒誰？輸入名字');
+                    const target = prompt('要毒誰？輸入名字(沒做防呆，輸錯你就浪費了)');
                     if (target) socket.emit('night result', { type: 'witch-poison', target: target });
                 };
                 gameControls.appendChild(btn2);
