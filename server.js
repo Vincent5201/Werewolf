@@ -35,7 +35,9 @@ io.on('connection', socket => {
                 firstTalk: null,
                 talking: null,
                 callback: null,
-                lastWord: null
+                lastWord: null,
+                debate: null,
+                debateIdx: null
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -102,8 +104,7 @@ io.on('connection', socket => {
 
         let rolesList = [];
         const config = room.rolesConfig || {
-            seer: 1, witch: 1, hunter: 1, idiot: 1,
-            werewolf: 4, villager: 4
+            guard: 1, werewolf: 1, villager: 2
         };
 
         for (const [role, count] of Object.entries(config)) {
@@ -296,7 +297,6 @@ io.on('connection', socket => {
 
         room.talking = room.firstTalk;
         checkHunter(roomId, victim, () => {
-            room.votes = {};
             const tmp = room.seats[room.talking];
             io.to(roomId).emit('start talking', { talking: tmp });
         });
@@ -344,6 +344,8 @@ io.on('connection', socket => {
         }
         if (room.talking == room.firstTalk) {
             const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
+            room.votes = {};
+            room.debate = null;
             io.to(currentRoom).emit('start voting', { candidates });
         } else {
             const name = room.seats[room.talking];
@@ -351,20 +353,51 @@ io.on('connection', socket => {
         }
     });
 
-    socket.on('vote', voted => {
+    socket.on('vote', ({ playerName, voted }) => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || !room.alive[playerName]) return;
-        room.votes[playerName] = voted;
-
-        if (Object.keys(room.votes).length === Object.keys(room.alive).filter(n => room.alive[n]).length) {
-            const result = mostFrequent(Object.values(room.votes));
-            if (room.alive[result]) room.alive[result] = false;
-            io.to(currentRoom).emit('chat message', `被投票處決的是：${result}`);
-            if (room.roles[result] === 'idiot') io.to(currentRoom).emit('chat message', `他是白癡`);
-            checkGameEnd(currentRoom);
-            room.lastWord = result;
-            io.to(currentRoom).emit('last words', { talking: result });
+        if (room.debate === null) {
+            room.votes[voted] = (room.votes[voted] || 0) + 1;
+            const totalVotes = Object.values(room.votes).reduce((sum, count) => sum + count, 0);
+            if (totalVotes === Object.keys(room.alive).filter(n => room.alive[n]).length) {
+                const result = getTopVoted(room.votes);
+                if (result.length === 1) {
+                    if (room.alive[result[0]]) room.alive[result[0]] = false;
+                    io.to(currentRoom).emit('chat message', `被投票處決的是：${result[0]}`);
+                    if (room.roles[result[0]] === 'idiot') io.to(currentRoom).emit('chat message', `他是白癡`);
+                    checkGameEnd(currentRoom);
+                    room.lastWord = result[0];
+                    io.to(currentRoom).emit('last words', { talking: result[0] });
+                } else {
+                    room.debate = result;
+                    room.debateIdx = 0;
+                    io.to(currentRoom).emit('start debate', { talking: room.debate[room.debateIdx] });
+                }
+            }
+        } else {
+            if (room.debate.includes(playerName)) return;
+            room.votes[voted] = (room.votes[voted] || 0) + 1;
+            const totalVotes = Object.values(room.votes).reduce((sum, count) => sum + count, 0);
+            const otherscount = Object.keys(room.alive).filter(n => {
+                return room.alive[n] && !room.debate.includes(n);
+            }).length;
+            if (totalVotes === otherscount) {
+                room.debate = null;
+                const result = getTopVoted(room.votes);
+                if (result.length === 1) {
+                    if (room.alive[result[0]]) room.alive[result[0]] = false;
+                    io.to(currentRoom).emit('chat message', `被投票處決的是：${result[0]}`);
+                    if (room.roles[result[0]] === 'idiot') io.to(currentRoom).emit('chat message', `他是白癡`);
+                    checkGameEnd(currentRoom);
+                    room.lastWord = result[0];
+                    io.to(currentRoom).emit('last words', { talking: result[0] });
+                } else {
+                    startNightPhase(currentRoom);
+                }
+            } 
         }
+
+        
     });
 
     socket.on('end last words', playerName => {
@@ -373,6 +406,19 @@ io.on('connection', socket => {
         checkHunter(currentRoom, playerName, () => {
             startNightPhase(currentRoom);
         });
+    });
+
+    socket.on('end debate', playerName => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName != room.debate[room.debateIdx]) return;
+        room.debateIdx++;
+        room.debateIdx %= room.debate.length;
+        if (room.debateIdx === 0) {
+            room.votes = {};
+            io.to(currentRoom).emit('start voting', { candidates: room.debate });
+        } else {
+            io.to(currentRoom).emit('start debate', { talking: room.debate[room.debateIdx] });
+        }
     });
 
 
@@ -402,10 +448,19 @@ io.on('connection', socket => {
     });
 });
 
-function mostFrequent(arr) {
-    const count = {};
-    arr.forEach(v => (count[v] = (count[v] || 0) + 1));
-    return Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0];
+function getTopVoted(votes) {
+    let maxVote = -Infinity;
+    const topCandidates = [];
+    for (const [name, count] of Object.entries(votes)) {
+        if (count > maxVote) {
+            maxVote = count;
+            topCandidates.length = 0;
+            topCandidates.push(name);
+        } else if (count === maxVote) {
+            topCandidates.push(name);
+        }
+    }
+    return topCandidates;
 }
 
 const PORT = process.env.PORT || 3000;

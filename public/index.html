@@ -190,7 +190,6 @@
                 statusH2.textContent = '狼人，請投票要殺的人(只能投一次，不要亂點)';
             }
             players.forEach(p => {
-                if (p === yourName) return;
                 const btn = document.createElement('button');
                 btn.textContent = p;
                 btn.onclick = () => socket.emit('night result', { type: 'werewolf', target: p });
@@ -265,10 +264,9 @@
         statusH2.textContent = '白天投票時間';
         gameControls.innerHTML = '';
         candidates.forEach(p => {
-            if (p === yourName) return;
             const btn = document.createElement('button');
             btn.textContent = p;
-            btn.onclick = () => socket.emit('vote', p);
+            btn.onclick = () => socket.emit('vote', { playerName: yourName, voted: p });
             gameControls.appendChild(btn);
         });
     });
@@ -279,6 +277,15 @@
         const btn = document.createElement('button');
         btn.textContent = '結束發言';
         btn.onclick = () => socket.emit('end last words', yourName);
+        gameControls.appendChild(btn);
+    });
+
+    socket.on('start debate', ({ talking }) => {
+        statusH2.textContent = `平票辯論時間, ${talking} 發言`;
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '結束發言';
+        btn.onclick = () => socket.emit('end debate', yourName);
         gameControls.appendChild(btn);
     });
 
