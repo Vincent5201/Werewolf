@@ -59,7 +59,8 @@ io.on('connection', socket => {
         const room = rooms[currentRoom];
         if (!room || socket.id !== room.host || room.gameStarted) return;
         room.rolesConfig = config;
-        socket.emit('chat message', '角色配置已更新');
+        room.withPolice = config.police;
+        socket.emit('chat message', '遊戲配置已更新');
     });
 
     socket.on('chat message', msg => {
@@ -130,6 +131,7 @@ io.on('connection', socket => {
         room.nightActions.guard = null;
         room.nightActions.save = null;
         room.nightActions.poison = null;
+        room.police = null;
         
         for (const [socketId, name] of Object.entries(room.users)) {
             const role = room.roles[name];
@@ -226,6 +228,7 @@ io.on('connection', socket => {
         const donePlayers = Object.keys(room.nightActions.ends);
         if (donePlayers.length === alivePlayers.length) {
             if (room.withPolice) {
+                room.state = "police election check";
                 room.election = {}
                 io.to(roomId).emit('police election');
             } else {
@@ -247,6 +250,7 @@ io.on('connection', socket => {
                 while (room.election[room.seats[room.elecTalkingIdx]] !== true) {
                     room.elecTalkingIdx++;
                 }
+                room.state = "police election talking";
                 io.to(currentRoom).emit('election talking', { talking: room.seats[room.elecTalkingIdx] });
             } else {
                 startDayPhase(currentRoom);
@@ -258,12 +262,13 @@ io.on('connection', socket => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || playerName != room.seats[room.elecTalkingIdx]) return;
         room.elecTalkingIdx++;
-        while (room.elecTalkingIdx !== 12 && room.election[room.seats[room.elecTalkingIdx]] !== true)
+        while (room.elecTalkingIdx < 12 && room.election[room.seats[room.elecTalkingIdx]] !== true)
             room.elecTalkingIdx++;
         
         if (room.elecTalkingIdx === 12) {
             room.votes = {};
             const candidates = Object.keys(room.election).filter(name => room.election[name]);
+            room.state = "police election voting";
             io.to(currentRoom).emit('election voting', { candidates });
         } else {
             io.to(currentRoom).emit('election talking', { talking: room.seats[room.elecTalkingIdx] });
@@ -289,6 +294,7 @@ io.on('connection', socket => {
                 if (room.debate === null) {
                     room.debate = result;
                     room.debateIdx = 0;
+                    room.state = "police election debate";
                     io.to(currentRoom).emit('start elecDebate', { talking: room.debate[room.debateIdx] });
                 } else {
                     room.debate = null;
@@ -304,6 +310,7 @@ io.on('connection', socket => {
         room.debateIdx++;
         if (room.debateIdx === room.debate.length) {
             room.votes = {};
+            room.state = "police election debate voting";
             io.to(currentRoom).emit('election voting', { candidates: room.debate });
         } else {
             io.to(currentRoom).emit('start elecDebate', { talking: room.debate[room.debateIdx] });
@@ -311,6 +318,7 @@ io.on('connection', socket => {
     });
 
     function startDayPhase(roomId) {
+        room.state = "prepare daytime";
         const room = rooms[roomId];
         if (!room || !room.gameStarted) return;
         room.dayCount++;
@@ -343,12 +351,13 @@ io.on('connection', socket => {
         io.to(roomId).emit('chat message', `第 ${room.dayCount} 天 天亮了，死亡名單：${deathList.join(', ') || '無人死亡'}`);
         checkGameEnd(roomId);
         
-        if (room.withPolice && deathList.includes(room.police)) {
+        if (room.police !== null && deathList.includes(room.police)) {
             sendPolice(roomId, () => {
                 if (room.dayCount === 1 && deathList.length > 0) {
                     room.D1LastWord = deathList;
                     room.D1LastWordIdx = 0;
                     room.callback = () => checkHunter(roomId, victim, deathList);
+                    room.state = "d1 last words";
                     io.to(roomId).emit('D1 last words', { talking: room.D1LastWord[0] });
                 } else {
                     checkHunter(roomId, victim, deathList);
@@ -359,6 +368,7 @@ io.on('connection', socket => {
                 room.D1LastWord = deathList;
                 room.D1LastWordIdx = 0;
                 room.callback = () => checkHunter(roomId, victim, deathList);
+                room.state = "d1 last words";
                 io.to(roomId).emit('D1 last words', { talking: room.D1LastWord[0] });
             } else {
                 checkHunter(roomId, victim, deathList);
@@ -368,6 +378,7 @@ io.on('connection', socket => {
 
     function sendPolice(roomId, onDone) {
         const room = rooms[roomId];
+        room.state = "send police";
         room.policecallback = onDone;
         const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
         io.to(roomId).emit('send police', { candidates: candidates});
@@ -396,8 +407,11 @@ io.on('connection', socket => {
     socket.on('end shoted last words', playerName => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || playerName != room.D1LastWord[room.D1LastWordIdx]) return;
-        
-        startTalking(currentRoom, null);
+        if (room.state === 'voting') {
+            startNightPhase(roomId);
+        } else {
+            startTalking(currentRoom, null);
+        }
     });
 
     function startTalking(roomId, deathList) {
@@ -415,6 +429,7 @@ io.on('connection', socket => {
                 }
             }
             room.talking = room.firstTalk;
+            room.state = "talking";
             io.to(roomId).emit('start talking', { talking: room.seats[room.talking] });
         } else {
             io.to(roomId).emit('select direction');
@@ -433,6 +448,7 @@ io.on('connection', socket => {
         }
         room.firstTalk += room.talkingDirec;
         room.talking = room.firstTalk;
+        room.state = "talking";
         io.to(currentRoom).emit('start talking', { talking: room.seats[room.talking] });
     });
 
@@ -441,6 +457,7 @@ io.on('connection', socket => {
         if (!room || !room.gameStarted) return;
         if (victim !== null && (room.roles[victim] === 'hunter' || room.roles[victim] === 'wolfhunter')) {
             const hunterSocket = room.sockets[victim];
+            room.state = "wait hunter";
             if (room.state === 'voting') {
                 room.callback = () => startNightPhase(roomId);
             } else {
@@ -471,11 +488,13 @@ io.on('connection', socket => {
                     sendPolice(currentRoom, () => {
                         room.D1LastWord = [target];
                         room.D1LastWordIdx = 0;
+                        room.state = "shoted last word";
                         io.to(currentRoom).emit('shoted last words', { talking: room.D1LastWord[0] });
                     });
                 } else {
                     room.D1LastWord = [target];
                     room.D1LastWordIdx = 0;
+                    room.state = "shoted last word";
                     io.to(currentRoom).emit('shoted last words', { talking: room.D1LastWord[0] });
                 }
             } else {
@@ -485,8 +504,6 @@ io.on('connection', socket => {
                     startTalking(currentRoom, null);
                 }
             }
-            
-            
         } else {
             room.callback();
             room.callback = null;
@@ -541,16 +558,19 @@ io.on('connection', socket => {
                 if (room.police === result) {
                     sendPolice(currentRoom, () => {
                         room.lastWord = result[0];
+                        room.state = "last word";
                         io.to(currentRoom).emit('last words', { talking: result[0] });
                     });
                 } else {
                     room.lastWord = result[0];
+                    room.state = "last word";
                     io.to(currentRoom).emit('last words', { talking: result[0] });
                 }
             } else {
                 if (room.debate === null) {
                     room.debate = result;
                     room.debateIdx = 0;
+                    room.state = "vote debate";
                     io.to(currentRoom).emit('start debate', { talking: room.debate[room.debateIdx] });
                 } else {
                     room.debate = null;
@@ -572,6 +592,7 @@ io.on('connection', socket => {
         room.debateIdx++;
         if (room.debateIdx === room.debate.length) {
             room.votes = {};
+            room.state = "voting";
             io.to(currentRoom).emit('start voting', { candidates: room.debate });
         } else {
             io.to(currentRoom).emit('start debate', { talking: room.debate[room.debateIdx] });

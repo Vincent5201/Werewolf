@@ -68,7 +68,12 @@
             <input id="villagerNum" type="number" placeholder="平民" value="3">
         </div>
 
-        <button id="submitRoles">送出角色設定</button>
+        <div class="role-row">
+            <label for="policeEnabled">是否開啟警長</label>
+            <input id="policeEnabled" type="checkbox">
+        </div>
+
+        <button id="submitRoles">送出遊戲設定</button>
         </div>
     </div>
     <div id="chat"></div>
@@ -112,7 +117,8 @@
             werewolf: parseInt(document.getElementById('werewolfNum').value),
             villager: parseInt(document.getElementById('villagerNum').value),
             guard: parseInt(document.getElementById('guardNum').value),
-            wolfhunter: parseInt(document.getElementById('wolfhunterNum').value)
+            wolfhunter: parseInt(document.getElementById('wolfhunterNum').value),
+            police: document.getElementById('policeEnabled').checked 
         };
         socket.emit('set roles config', config);
     };
