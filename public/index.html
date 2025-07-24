@@ -266,6 +266,19 @@
         gameControls.appendChild(btn2);
     });
 
+    socket.on('select direction', () => {
+        statusH2.textContent = '警長選擇發言順序(誰先)';
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '左(小)';
+        btn.onclick = () => socket.emit('direction reply', { playerName: yourName, choice: true });
+        gameControls.appendChild(btn);
+        const btn2 = document.createElement('button');
+        btn2.textContent = '右(大)';
+        btn2.onclick = () => socket.emit('direction reply', { playerName: yourName, choice: false });
+        gameControls.appendChild(btn2);
+    });
+
     socket.on('election talking', ({ talking }) => {
         statusH2.textContent = `競選警長發言時間, ${talking} 發言`;
         gameControls.innerHTML = '';
@@ -295,6 +308,21 @@
         });
     });
 
+    socket.on('send police', ({ candidates }) => {
+        statusH2.textContent = '傳遞警徽時間';
+        gameControls.innerHTML = '';
+        candidates.forEach(p => {
+            const btn = document.createElement('button');
+            btn.textContent = p;
+            btn.onclick = () => socket.emit('send', { playerName: yourName, send: p });
+            gameControls.appendChild(btn);
+        });
+        const btn0 = document.createElement('button');
+        btn0.textContent = '放棄';
+        btn0.onclick = () => socket.emit('send', { playerName: yourName, send: null });
+        gameControls.appendChild(btn0);
+    });
+
     socket.on('election voting', ({ candidates }) => {
         statusH2.textContent = '警長投票時間(沒上警才能投)';
         gameControls.innerHTML = '';
@@ -321,6 +349,15 @@
         const btn = document.createElement('button');
         btn.textContent = '結束發言';
         btn.onclick = () => socket.emit('end D1 last words', yourName);
+        gameControls.appendChild(btn);
+    });
+
+    socket.on('shoted last words', ({ talking }) => {
+        statusH2.textContent = `遺言時間, ${talking} 發言`;
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '結束發言';
+        btn.onclick = () => socket.emit('end shoted last words', yourName);
         gameControls.appendChild(btn);
     });
 

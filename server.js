@@ -32,8 +32,10 @@ io.on('connection', socket => {
                 rolesConfig: null,
                 host: socket.id,
                 callback: null,
-                withPolice: true,
-                police: null
+                withPolice: false,
+                police: null,
+                talkingDirec: 1,
+                state: null
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -140,6 +142,7 @@ io.on('connection', socket => {
 
     function startNightPhase(roomId) {
         const room = rooms[roomId];
+        room.state = "night";
         if (!room || !room.gameStarted) return;
         room.nightActions = { wolfVotes: {}, seerCheck: null, victim: null, poison: null, ends: {}};
         io.to(roomId).emit('night phase');
@@ -238,6 +241,7 @@ io.on('connection', socket => {
         if (Object.keys(room.election).length === Object.keys(room.roles).length) {
             if (Object.keys(room.election).length === 1) {
                 room.police = Object.keys(room.election)[0];
+                startDayPhase(currentRoom);
             } else if (Object.keys(room.election).length > 0) {
                 room.elecTalkingIdx = 0;
                 while (room.election[room.seats[room.elecTalkingIdx]] !== true) {
@@ -335,88 +339,154 @@ io.on('connection', socket => {
             deathList.push(poisoned);
             room.alive[poisoned] = false;
         }
-
+        
         io.to(roomId).emit('chat message', `第 ${room.dayCount} 天 天亮了，死亡名單：${deathList.join(', ') || '無人死亡'}`);
         checkGameEnd(roomId);
-        if (room.dayCount === 1 && deathList.length > 0) {
-            room.D1LastWord = deathList;
-            room.D1LastWordIdx = 0;
-            room.callback = () => stratTalking(roomId, victim, deathList);
-            io.to(roomId).emit('D1 last words', { talking: room.D1LastWord[0] });
+        
+        if (room.withPolice && deathList.includes(room.police)) {
+            sendPolice(roomId, () => {
+                if (room.dayCount === 1 && deathList.length > 0) {
+                    room.D1LastWord = deathList;
+                    room.D1LastWordIdx = 0;
+                    room.callback = () => checkHunter(roomId, victim, deathList);
+                    io.to(roomId).emit('D1 last words', { talking: room.D1LastWord[0] });
+                } else {
+                    checkHunter(roomId, victim, deathList);
+                }
+            });
         } else {
-            stratTalking(roomId, victim, deathList);
+            if (room.dayCount === 1 && deathList.length > 0) {
+                room.D1LastWord = deathList;
+                room.D1LastWordIdx = 0;
+                room.callback = () => checkHunter(roomId, victim, deathList);
+                io.to(roomId).emit('D1 last words', { talking: room.D1LastWord[0] });
+            } else {
+                checkHunter(roomId, victim, deathList);
+            }
         }
     }
+
+    function sendPolice(roomId, onDone) {
+        const room = rooms[roomId];
+        room.policecallback = onDone;
+        const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
+        io.to(roomId).emit('send police', { candidates: candidates});
+    }
+
+    socket.on('send', ({ playerName, send }) => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName !== room.police) return;
+        room.police = send;
+        room.policecallback();
+        room.policecallback = null;
+    });
 
     socket.on('end D1 last words', playerName => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || playerName != room.D1LastWord[room.D1LastWordIdx]) return;
         room.D1LastWordIdx++;
         if (room.D1LastWordIdx === room.D1LastWord.length) {
-            if (typeof room.callback === 'function') {
-                room.callback();
-                room.callback = null;
-            } else {
-                const alivePlayers = Object.keys(room.alive).filter(name => room.alive[name]);
-                const randomIndex = Math.floor(Math.random() * alivePlayers.length);
-                room.firstTalk = room.seats.indexOf(alivePlayers[randomIndex]);
-                room.talking = room.firstTalk;
-                const tmp = room.seats[room.talking];
-                io.to(currentRoom).emit('start talking', { talking: tmp });
-            }
+            room.callback();
+            room.callback = null;
         } else {
             io.to(currentRoom).emit('D1 last words', { talking: room.D1LastWord[room.D1LastWordIdx] });
         }
     });
 
-    function stratTalking(roomId, victim, deathList) {
-        const room = rooms[roomId];
-        if (deathList.length === 1) {
-            room.firstTalk = room.seats.indexOf(deathList[0]);
-            while (!room.alive[room.seats[room.firstTalk]]) {
-                room.firstTalk++;
-                room.firstTalk %= 12;
-            }
-        } else {
-            const alivePlayers = Object.keys(room.alive).filter(name => room.alive[name]);
-            const randomIndex = Math.floor(Math.random() * alivePlayers.length);
-            room.firstTalk = room.seats.indexOf(alivePlayers[randomIndex]);
-        }
+    socket.on('end shoted last words', playerName => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName != room.D1LastWord[room.D1LastWordIdx]) return;
+        
+        startTalking(currentRoom, null);
+    });
 
-        room.talking = room.firstTalk;
-        checkHunter(roomId, victim, () => {
-            const tmp = room.seats[room.talking];
-            io.to(roomId).emit('start talking', { talking: tmp });
-        });
+    function startTalking(roomId, deathList) {
+        const room = rooms[roomId];
+        if (room.police === null) {
+            if (deathList === null || deathList.length !== 1) {
+                const alivePlayers = Object.keys(room.alive).filter(name => room.alive[name]);
+                const randomIndex = Math.floor(Math.random() * alivePlayers.length);
+                room.firstTalk = room.seats.indexOf(alivePlayers[randomIndex]);
+            } else {
+                room.firstTalk = room.seats.indexOf(deathList[0]);
+                while (!room.alive[room.seats[room.firstTalk]]) {
+                    room.firstTalk++;
+                    room.firstTalk %= 12;
+                }
+            }
+            room.talking = room.firstTalk;
+            io.to(roomId).emit('start talking', { talking: room.seats[room.talking] });
+        } else {
+            io.to(roomId).emit('select direction');
+        }
     }
 
-    function checkHunter(roomId, victim, onDone) {
+    socket.on('direction reply', ({ playerName, choice }) => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName !== room.police) return;
+        
+        room.firstTalk = room.seats.indexOf(room.police);
+        if (choice) {
+            room.talkingDirec = -1;
+        } else {
+            room.talkingDirec = 1;
+        }
+        room.firstTalk += room.talkingDirec;
+        room.talking = room.firstTalk;
+        io.to(currentRoom).emit('start talking', { talking: room.seats[room.talking] });
+    });
+
+    function checkHunter(roomId, victim, deathList) {
         const room = rooms[roomId];
         if (!room || !room.gameStarted) return;
         if (victim !== null && (room.roles[victim] === 'hunter' || room.roles[victim] === 'wolfhunter')) {
             const hunterSocket = room.sockets[victim];
-            if (hunterSocket) {
-                room.callback = onDone;
-                hunterSocket.emit('hunter shoot', {
-                    players: Object.keys(room.alive).filter(n => room.alive[n])
-                });
+            if (room.state === 'voting') {
+                room.callback = () => startNightPhase(roomId);
+            } else {
+                room.callback = () => startTalking(roomId, deathList);
             }
+            hunterSocket.emit('hunter shoot', {
+                players: Object.keys(room.alive).filter(n => room.alive[n])
+            });
         } else {
-            setTimeout(() => onDone(), 3000);
+            if (room.state === 'voting') {
+                startNightPhase(roomId);
+            } else {
+                startTalking(roomId, deathList);
+            }
         }
     }
-
     socket.on('hunter shot', target => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted) return;
 
-        if (target && target in room.alive && room.alive[target]) {
+        if (target !== null && target in room.alive && room.alive[target]) {
             room.alive[target] = false;
             io.to(currentRoom).emit('chat message', `${playerName} 在死前開槍射殺了 ${target}！`);
             checkGameEnd(currentRoom);
-            room.D1LastWord = [target];
-            room.D1LastWordIdx = 0;
-            io.to(currentRoom).emit('D1 last words', { talking: room.D1LastWord[0] });
+            room.callback = null;
+            if (room.dayCount === 1 || room.state === 'voting') {
+                if (target === room.police) {
+                    sendPolice(currentRoom, () => {
+                        room.D1LastWord = [target];
+                        room.D1LastWordIdx = 0;
+                        io.to(currentRoom).emit('shoted last words', { talking: room.D1LastWord[0] });
+                    });
+                } else {
+                    room.D1LastWord = [target];
+                    room.D1LastWordIdx = 0;
+                    io.to(currentRoom).emit('shoted last words', { talking: room.D1LastWord[0] });
+                }
+            } else {
+                if (target === room.police) {
+                    sendPolice(currentRoom, () => startTalking(currentRoom, null));
+                } else {
+                    startTalking(currentRoom, null);
+                }
+            }
+            
+            
         } else {
             room.callback();
             room.callback = null;
@@ -426,16 +496,17 @@ io.on('connection', socket => {
     socket.on('end talking', playerName => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || playerName != room.seats[room.talking]) return;
-        room.talking++;
+        room.talking += room.talkingDirec + 12;
         room.talking %= 12;
         while (!room.alive[room.seats[room.talking]]) {
-            room.talking++;
+            room.talking += room.talkingDirec + 12;
             room.talking %= 12;
         }
         if (room.talking === room.firstTalk) {
             const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
             room.votes = {};
             room.debate = null;
+            room.state = 'voting';
             io.to(currentRoom).emit('start voting', { candidates });
         } else {
             const name = room.seats[room.talking];
@@ -466,8 +537,16 @@ io.on('connection', socket => {
                 io.to(currentRoom).emit('chat message', `被投票處決的是：${result[0]}`);
                 if (room.roles[result[0]] === 'idiot') io.to(currentRoom).emit('chat message', `他是白癡`);
                 checkGameEnd(currentRoom);
-                room.lastWord = result[0];
-                io.to(currentRoom).emit('last words', { talking: result[0] });
+        
+                if (room.police === result) {
+                    sendPolice(currentRoom, () => {
+                        room.lastWord = result[0];
+                        io.to(currentRoom).emit('last words', { talking: result[0] });
+                    });
+                } else {
+                    room.lastWord = result[0];
+                    io.to(currentRoom).emit('last words', { talking: result[0] });
+                }
             } else {
                 if (room.debate === null) {
                     room.debate = result;
@@ -484,9 +563,7 @@ io.on('connection', socket => {
     socket.on('end last words', playerName => {
         const room = rooms[currentRoom];
         if (!room || !room.gameStarted || playerName != room.lastWord) return;
-        checkHunter(currentRoom, playerName, () => {
-            startNightPhase(currentRoom);
-        });
+        checkHunter(currentRoom, playerName, null);
     });
 
     socket.on('end debate', playerName => {
