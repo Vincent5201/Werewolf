@@ -31,7 +31,9 @@ io.on('connection', socket => {
                 dayCount: 0,
                 rolesConfig: null,
                 host: socket.id,
-                callback: null
+                callback: null,
+                withPolice: true,
+                police: null
             };
         }
         const nameExists = Object.values(rooms[roomId].users).includes(name);
@@ -220,9 +222,89 @@ io.on('connection', socket => {
         const alivePlayers = Object.keys(room.roles).filter(name => room.alive[name]);
         const donePlayers = Object.keys(room.nightActions.ends);
         if (donePlayers.length === alivePlayers.length) {
-            setTimeout(() => startDayPhase(roomId), 3000);
+            if (room.withPolice) {
+                room.election = {}
+                io.to(roomId).emit('police election');
+            } else {
+                startDayPhase(roomId);
+            }
         }
     }
+
+    socket.on('election reply', ({ playerName, choice }) => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName in room.election) return;
+        room.election[playerName] = choice
+        if (Object.keys(room.election).length === Object.keys(room.roles).length) {
+            if (Object.keys(room.election).length === 1) {
+                room.police = Object.keys(room.election)[0];
+            } else if (Object.keys(room.election).length > 0) {
+                room.elecTalkingIdx = 0;
+                while (room.election[room.seats[room.elecTalkingIdx]] !== true) {
+                    room.elecTalkingIdx++;
+                }
+                io.to(currentRoom).emit('election talking', { talking: room.seats[room.elecTalkingIdx] });
+            } else {
+                startDayPhase(currentRoom);
+            }
+        }
+    });
+
+    socket.on('end electalking', playerName => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName != room.seats[room.elecTalkingIdx]) return;
+        room.elecTalkingIdx++;
+        while (room.elecTalkingIdx !== 12 && room.election[room.seats[room.elecTalkingIdx]] !== true)
+            room.elecTalkingIdx++;
+        
+        if (room.elecTalkingIdx === 12) {
+            room.votes = {};
+            const candidates = Object.keys(room.election).filter(name => room.election[name]);
+            io.to(currentRoom).emit('election voting', { candidates });
+        } else {
+            io.to(currentRoom).emit('election talking', { talking: room.seats[room.elecTalkingIdx] });
+        }
+    });
+
+    socket.on('election vote', ({ playerName, voted }) => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || room.election[playerName]) return;
+        let tgtVotes = Object.keys(room.election).filter(n => room.election[n] === false).length;
+        
+        room.votes[voted] = (room.votes[voted] || 0) + 1;
+        const totalVotes = Object.values(room.votes).reduce((sum, count) => sum + count, 0);
+
+        if (totalVotes === tgtVotes) {
+            const result = getTopVoted(room.votes);
+            if (result.length === 1) {
+                room.debate = null;
+                room.police = result[0];
+                io.to(currentRoom).emit('chat message', `${result[0]}當選警長`);
+                startDayPhase(currentRoom);
+            } else {
+                if (room.debate === null) {
+                    room.debate = result;
+                    room.debateIdx = 0;
+                    io.to(currentRoom).emit('start elecDebate', { talking: room.debate[room.debateIdx] });
+                } else {
+                    room.debate = null;
+                    startDayPhase(currentRoom);
+                }
+            }
+        } 
+    });
+
+    socket.on('end elecDebate', playerName => {
+        const room = rooms[currentRoom];
+        if (!room || !room.gameStarted || playerName != room.debate[room.debateIdx]) return;
+        room.debateIdx++;
+        if (room.debateIdx === room.debate.length) {
+            room.votes = {};
+            io.to(currentRoom).emit('election voting', { candidates: room.debate });
+        } else {
+            io.to(currentRoom).emit('start elecDebate', { talking: room.debate[room.debateIdx] });
+        }
+    });
 
     function startDayPhase(roomId) {
         const room = rooms[roomId];
@@ -350,7 +432,7 @@ io.on('connection', socket => {
             room.talking++;
             room.talking %= 12;
         }
-        if (room.talking == room.firstTalk) {
+        if (room.talking === room.firstTalk) {
             const candidates = Object.keys(room.alive).filter(n => room.alive[n]);
             room.votes = {};
             room.debate = null;

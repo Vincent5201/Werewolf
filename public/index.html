@@ -45,7 +45,7 @@
 
         <div class="role-row">
             <label for="idiotNum">白癡</label>
-            <input id="idiotNum" type="number" placeholder="白癡" value="1">
+            <input id="idiotNum" type="number" placeholder="白癡" value="0">
         </div>
 
         <div class="role-row">
@@ -60,12 +60,12 @@
 
         <div class="role-row">
             <label for="werewolfNum">狼人</label>
-            <input id="werewolfNum" type="number" placeholder="狼人" value="4">
+            <input id="werewolfNum" type="number" placeholder="狼人" value="3">
         </div>
 
         <div class="role-row">
             <label for="villagerNum">平民</label>
-            <input id="villagerNum" type="number" placeholder="平民" value="4">
+            <input id="villagerNum" type="number" placeholder="平民" value="3">
         </div>
 
         <button id="submitRoles">送出角色設定</button>
@@ -167,7 +167,7 @@
         statusH2.textContent = '夜晚來臨...';
         gameControls.innerHTML = '';
     });
-
+    
     socket.on('werewolf teammates', teammates => {
         alert('你的狼人隊友有：' + teammates.join('、'));
     });
@@ -253,6 +253,28 @@
         gameControls.appendChild(btn);
     });
 
+    socket.on('police election', () => {
+        statusH2.textContent = '要競選警長嗎(只能點一次)';
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '要';
+        btn.onclick = () => socket.emit('election reply', { playerName: yourName, choice: true });
+        gameControls.appendChild(btn);
+        const btn2 = document.createElement('button');
+        btn2.textContent = '不要';
+        btn2.onclick = () => socket.emit('election reply', { playerName: yourName, choice: false });
+        gameControls.appendChild(btn2);
+    });
+
+    socket.on('election talking', ({ talking }) => {
+        statusH2.textContent = `競選警長發言時間, ${talking} 發言`;
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '結束發言';
+        btn.onclick = () => socket.emit('end electalking', yourName);
+        gameControls.appendChild(btn);
+    });
+    
     socket.on('start talking', ({ talking }) => {
         statusH2.textContent = `白天發言時間, ${talking} 發言`;
         gameControls.innerHTML = '';
@@ -269,6 +291,17 @@
             const btn = document.createElement('button');
             btn.textContent = p;
             btn.onclick = () => socket.emit('vote', { playerName: yourName, voted: p });
+            gameControls.appendChild(btn);
+        });
+    });
+
+    socket.on('election voting', ({ candidates }) => {
+        statusH2.textContent = '警長投票時間(沒上警才能投)';
+        gameControls.innerHTML = '';
+        candidates.forEach(p => {
+            const btn = document.createElement('button');
+            btn.textContent = p;
+            btn.onclick = () => socket.emit('election vote', { playerName: yourName, voted: p });
             gameControls.appendChild(btn);
         });
     });
@@ -297,6 +330,15 @@
         const btn = document.createElement('button');
         btn.textContent = '結束發言';
         btn.onclick = () => socket.emit('end debate', yourName);
+        gameControls.appendChild(btn);
+    });
+
+    socket.on('start elecDebate', ({ talking }) => {
+        statusH2.textContent = `平票辯論時間, ${talking} 發言`;
+        gameControls.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.textContent = '結束發言';
+        btn.onclick = () => socket.emit('end elecDebate', yourName);
         gameControls.appendChild(btn);
     });
 
