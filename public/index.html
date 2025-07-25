@@ -285,22 +285,33 @@
         gameControls.appendChild(btn2);
     });
 
-    socket.on('election talking', ({ talking }) => {
-        statusH2.textContent = `競選警長發言時間, ${talking} 發言`;
+    socket.on('talking time', ({ talking, phase }) => {
         gameControls.innerHTML = '';
         const btn = document.createElement('button');
         btn.textContent = '結束發言';
-        btn.onclick = () => socket.emit('end electalking', yourName);
         gameControls.appendChild(btn);
-    });
-    
-    socket.on('start talking', ({ talking }) => {
-        statusH2.textContent = `白天發言時間, ${talking} 發言`;
-        gameControls.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.textContent = '結束發言';
-        btn.onclick = () => socket.emit('end talking', yourName);
-        gameControls.appendChild(btn);
+        if (phase === 'election') {
+            statusH2.textContent = `競選警長發言時間, ${talking} 發言`;
+            btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'election'});
+        } else if (phase === 'daytime') {
+            statusH2.textContent = `白天發言時間, ${talking} 發言`;
+            btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'daytime'});
+        } else if (phase === 'last word') {
+            statusH2.textContent = `遺言時間, ${talking} 發言`;
+            btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'last word'});
+        } else if (phase === 'D1 last word') {
+            statusH2.textContent = `遺言時間, ${talking} 發言`;
+            btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'D1 last word'});
+        } else if (phase === 'shoted last word') {
+            statusH2.textContent = `遺言時間, ${talking} 發言`;
+            btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'shoted last word'});
+        } else if (phase === 'debate') {
+            statusH2.textContent = `平票辯論時間, ${talking} 發言`;
+            btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'debate'});
+        } else if (phase === 'elecDebate') {
+            statusH2.textContent = `平票辯論時間, ${talking} 發言`;
+            btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'elecDebate'});
+        }
     });
 
     socket.on('start voting', ({ candidates }) => {
@@ -338,51 +349,6 @@
             btn.onclick = () => socket.emit('election vote', { playerName: yourName, voted: p });
             gameControls.appendChild(btn);
         });
-    });
-
-    socket.on('last words', ({ talking }) => {
-        statusH2.textContent = `遺言時間, ${talking} 發言`;
-        gameControls.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.textContent = '結束發言';
-        btn.onclick = () => socket.emit('end last words', yourName);
-        gameControls.appendChild(btn);
-    });
-
-    socket.on('D1 last words', ({ talking }) => {
-        statusH2.textContent = `遺言時間, ${talking} 發言`;
-        gameControls.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.textContent = '結束發言';
-        btn.onclick = () => socket.emit('end D1 last words', yourName);
-        gameControls.appendChild(btn);
-    });
-
-    socket.on('shoted last words', ({ talking }) => {
-        statusH2.textContent = `遺言時間, ${talking} 發言`;
-        gameControls.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.textContent = '結束發言';
-        btn.onclick = () => socket.emit('end shoted last words', yourName);
-        gameControls.appendChild(btn);
-    });
-
-    socket.on('start debate', ({ talking }) => {
-        statusH2.textContent = `平票辯論時間, ${talking} 發言`;
-        gameControls.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.textContent = '結束發言';
-        btn.onclick = () => socket.emit('end debate', yourName);
-        gameControls.appendChild(btn);
-    });
-
-    socket.on('start elecDebate', ({ talking }) => {
-        statusH2.textContent = `平票辯論時間, ${talking} 發言`;
-        gameControls.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.textContent = '結束發言';
-        btn.onclick = () => socket.emit('end elecDebate', yourName);
-        gameControls.appendChild(btn);
     });
 
     function translateRole(r) {
