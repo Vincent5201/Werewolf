@@ -125,6 +125,7 @@ io.on('connection', socket => {
         };
 
         for (const [role, count] of Object.entries(config)) {
+            if (role === 'police') continue;
             for (let i = 0; i < count; i++) {
                 rolesList.push(role);
             }
@@ -270,10 +271,7 @@ io.on('connection', socket => {
 
         room.election[playerName] = choice
         if (Object.keys(room.election).length === room.playersCount) {
-            if (Object.keys(room.election).length === 1) {
-                room.police = Object.keys(room.election)[0];
-                startDayPhase(currentRoom);
-            } else if (Object.keys(room.election).length > 0) {
+            if (Object.keys(room.election).filter(n => room.election[n]).length > 0) {
                 room.elecTalkingIdx = 0;
                 while (room.election[room.seats[room.elecTalkingIdx]] !== true) {
                     room.elecTalkingIdx++;
@@ -297,6 +295,7 @@ io.on('connection', socket => {
             
             if (room.elecTalkingIdx === room.playersCount) {
                 room.votes = {};
+                room.debate = null;
                 const candidates = Object.keys(room.election).filter(name => room.election[name]);
                 io.to(currentRoom).emit('election voting', { candidates });
             } else {
@@ -329,10 +328,10 @@ io.on('connection', socket => {
             }
         } else if (phase === 'daytime') {
             if (playerName != room.seats[room.talking]) return;
-            room.talking += room.talkingDirec + room.playersCount;
+            room.talking += room.talkingDirec;
             room.talking %= room.playersCount;
             while (!room.alive[room.seats[room.talking]]) {
-                room.talking += room.talkingDirec + room.playersCount;
+                room.talking += room.talkingDirec;
                 room.talking %= room.playersCount;
             }
             if (room.talking === room.firstTalk) {
@@ -541,11 +540,16 @@ io.on('connection', socket => {
         
         room.firstTalk = room.seats.indexOf(room.police);
         if (choice) {
-            room.talkingDirec = -1;
+            room.talkingDirec = Object.keys(room.alive).filter(name => room.alive[name]).length -1;
         } else {
             room.talkingDirec = 1;
         }
         room.firstTalk += room.talkingDirec;
+        room.firstTalk %= room.playersCount;
+        while (!room.alive[room.seats[room.firstTalk]]) {
+            room.firstTalk += room.talkingDirec;
+            room.firstTalk %= room.playersCount;
+        }
         room.talking = room.firstTalk;
         room.state = 'daytime';
         io.to(currentRoom).emit('talking time', { talking: room.seats[room.talking], phase: 'daytime' });
@@ -564,12 +568,12 @@ io.on('connection', socket => {
         } else {
             tgtVotes = Object.keys(room.alive).filter(n => room.alive[n]).length;
         }
-
+        console.log(`${voted}一票`);
         room.votes[voted] = (room.votes[voted] || 0) + 1;
         if (playerName === room.police) room.votes[voted] += 0.5;
         const totalVotes = Object.values(room.votes).reduce((sum, count) => sum + count, 0);
-
-        if (totalVotes === tgtVotes) {
+        
+        if (totalVotes === tgtVotes || totalVotes === tgtVotes + 0.5) {
             const result = getTopVoted(room.votes);
             if (result.length === 1) {
                 room.debate = null;
