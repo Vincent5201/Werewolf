@@ -29,19 +29,14 @@ io.on('connection', socket => {
                 nightActions: {},
                 playersCount: 0,
                 alive: {},
-                witchUsed: { save: false, poison: false },
-                dayCount: 0,
                 rolesConfig: null,
                 host: socket.id,
-                callback: null,
                 withPolice: false,
-                police: null,
-                talkingDirec: 1,
                 state: null
             };
         }
-        const nameExists = Object.values(rooms[roomId].users).includes(name);
-        if (nameExists) {
+    
+        if (Object.values(rooms[roomId].users).includes(name)) {
             socket.emit('name exists');
             return;
         }
@@ -49,9 +44,8 @@ io.on('connection', socket => {
         socket.join(roomId);
         rooms[roomId].users[socket.id] = name;
         rooms[roomId].sockets[name] = socket;
-        if (socket.id === rooms[roomId].host) {
-            socket.emit('you are host');
-        }
+        if (socket.id === rooms[roomId].host) socket.emit('you are host');
+            
         io.to(roomId).emit('update seats', {
             seats: rooms[roomId].seats
         });
@@ -68,9 +62,8 @@ io.on('connection', socket => {
     socket.on('chat message', msg => {
         if (currentRoom && playerName) {
             const room = rooms[currentRoom];
-            if (room && room.alive[playerName]) {
+            if (room.alive[playerName]) 
                 io.to(currentRoom).emit('chat message', `${playerName}: ${msg}`);
-            }
         }
     });
 
@@ -80,9 +73,9 @@ io.on('connection', socket => {
         if (seatIndex < 0 || seatIndex >= 12) return;
 
         if (room.seats[seatIndex] === null) {
-            if (currentSeat !== null) {
+            if (currentSeat !== null)
                 room.seats[currentSeat] = null;
-            }
+            
             room.seats[seatIndex] = playerName;
             currentSeat = seatIndex;
             io.to(currentRoom).emit('update seats', { seats: room.seats });
@@ -98,9 +91,7 @@ io.on('connection', socket => {
         if (seatedIndices.length === 0) return 0;
         const start = seatedIndices[0];
         for (let i = 0; i < seatedIndices.length; i++) {
-            if (seatedIndices[i] !== start + i) {
-                return 0;
-            }
+            if (seatedIndices[i] !== start + i) return 0;
         }
         return seatedIndices.length;
     }
@@ -123,7 +114,6 @@ io.on('connection', socket => {
         const config = room.rolesConfig || {
             guard: 1, werewolf: 1, villager: 2
         };
-
         for (const [role, count] of Object.entries(config)) {
             if (role === 'police') continue;
             for (let i = 0; i < count; i++) {
@@ -154,8 +144,6 @@ io.on('connection', socket => {
             io.to(currentRoom).emit('update player state', { name:p.name, state: '活著' });
         });
 
-        
-
         room.witchUsed = { save: false, poison: false };
         room.dayCount = 0;
         room.gameStarted = true;
@@ -184,9 +172,8 @@ io.on('connection', socket => {
         const werewolves = Object.keys(room.roles).filter(name => (room.roles[name] === 'werewolf' || room.roles[name] === 'wolfhunter'));
         for (const name of werewolves) {
             const socket = room.sockets[name];
-            if (socket) {
+            if (socket)
                 socket.emit('werewolf teammates', werewolves.filter(n => n !== name));
-            }
         }
         
         for (const [socketId, name] of Object.entries(room.users)) {
@@ -229,7 +216,6 @@ io.on('connection', socket => {
                 room.nightActions.victim = result.length === 1 ? result[0] : null;
                 const witchName = Object.keys(room.roles).find(name => room.roles[name] === 'witch');
                 const witchSocket = room.sockets[witchName];
-
                 if (witchSocket && room.alive[witchName]) {
                     witchSocket.emit('night action', {
                         type: 'witch',
@@ -276,16 +262,14 @@ io.on('connection', socket => {
         if (Object.keys(room.election).length === room.playersCount) {
             if (Object.keys(room.election).filter(n => room.election[n]).length > 0) {
                 for (const [name, elec] of Object.entries(room.election)) {
-                    if (elec === true) {
+                    if (elec === true)
                         io.to(currentRoom).emit('update player state', { name:name, state: '競選警長' });
-                    }
                 }
-                
                 room.electionCheck = { ...room.election };
                 room.elecTalkingIdx = 0;
-                while (room.election[room.seats[room.elecTalkingIdx]] !== true) {
+                while (room.election[room.seats[room.elecTalkingIdx]] !== true)
                     room.elecTalkingIdx++;
-                }
+
                 io.to(currentRoom).emit('talking time', { talking: room.seats[room.elecTalkingIdx], phase: 'election' });
             } else {
                 startDayPhase(currentRoom);
@@ -384,7 +368,7 @@ io.on('connection', socket => {
         if (totalVotes === tgtVotes) {
             const result = getTopVoted(room.votes);
             const voteSummary = Object.entries(room.votes)
-                .map(([name, voted]) => `${name}：${voted}`).join('、');
+                                .map(([name, voted]) => `${name}:${voted}`).join('、');
             io.to(currentRoom).emit('chat message', voteSummary);
             if (result.length === 1) {
                 room.debate = null;
@@ -484,13 +468,12 @@ io.on('connection', socket => {
         if (!room || !room.gameStarted) return;
         
         if (victim !== null && (room.roles[victim] === 'hunter' || room.roles[victim] === 'wolfhunter')) {
-            const hunterSocket = room.sockets[victim];
             if (room.state === 'daytime') {
                 room.callback = () => startNightPhase(roomId);
             } else {
                 room.callback = () => startTalking(roomId, deathList);
             }
-            hunterSocket.emit('hunter shoot', {
+            room.sockets[victim].emit('hunter shoot', {
                 players: Object.keys(room.alive).filter(n => room.alive[n])
             });
         } else {
@@ -571,12 +554,10 @@ io.on('connection', socket => {
         } else {
             room.talkingDirec = 1;
         }
-        room.firstTalk += room.talkingDirec;
-        room.firstTalk %= room.playersCount;
-        while (!room.alive[room.seats[room.firstTalk]]) {
-            room.firstTalk += room.talkingDirec;
-            room.firstTalk %= room.playersCount;
-        }
+        room.firstTalk = (room.firstTalk + room.talkingDirec) % room.playersCount;
+        while (!room.alive[room.seats[room.firstTalk]])
+            room.firstTalk = (room.firstTalk + room.talkingDirec) % room.playersCount;
+        
         room.talking = room.firstTalk;
         room.state = 'daytime';
         io.to(currentRoom).emit('talking time', { talking: room.seats[room.talking], phase: 'daytime' });
