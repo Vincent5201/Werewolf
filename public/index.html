@@ -272,10 +272,14 @@
         const btn = document.createElement('button');
         btn.textContent = '要開槍嗎';
         btn.onclick = () => {
-            const target = prompt('請輸入你要開槍的對象（名稱），悶槍則隨意輸入');
+            const target = prompt('請輸入你要開槍的對象（名稱）');
             socket.emit('hunter shot', target);
         };
         gameControls.appendChild(btn);
+        const btn2 = document.createElement('button');
+        btn2.textContent = "放棄開槍";
+        btn2.onclick = () => socket.emit('hunter shot', null);
+        gameControls.appendChild(btn2);
     });
 
     socket.on('police election', () => {
@@ -346,6 +350,10 @@
             btn.onclick = () => socket.emit('vote', { playerName: yourName, voted: p });
             gameControls.appendChild(btn);
         });
+        const btn2 = document.createElement('button');
+        btn2.textContent = "放棄";
+        btn2.onclick = () => socket.emit('election vote', { playerName: yourName, voted: "not voted" });
+        gameControls.appendChild(btn2);
     });
 
     socket.on('send police', ({ candidates }) => {
@@ -372,6 +380,10 @@
             btn.onclick = () => socket.emit('election vote', { playerName: yourName, voted: p });
             gameControls.appendChild(btn);
         });
+        const btn2 = document.createElement('button');
+        btn2.textContent = "放棄";
+        btn2.onclick = () => socket.emit('election vote', { playerName: yourName, voted: "not voted" });
+        gameControls.appendChild(btn2);
     });
 
     function translateRole(r) {

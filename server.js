@@ -383,6 +383,9 @@ io.on('connection', socket => {
 
         if (totalVotes === tgtVotes) {
             const result = getTopVoted(room.votes);
+            const voteSummary = Object.entries(room.votes)
+                .map(([name, voted]) => `${name}：${voted}`).join('、');
+            io.to(currentRoom).emit('chat message', voteSummary);
             if (result.length === 1) {
                 room.debate = null;
                 room.police = result[0];
@@ -592,13 +595,14 @@ io.on('connection', socket => {
         } else {
             tgtVotes = Object.keys(room.alive).filter(n => room.alive[n]).length;
         }
-        console.log(`${voted}一票`);
+        
         room.votes[voted] = (room.votes[voted] || 0) + 1;
         if (playerName === room.police) room.votes[voted] += 0.5;
         const totalVotes = Object.values(room.votes).reduce((sum, count) => sum + count, 0);
         
         if (totalVotes === tgtVotes || totalVotes === tgtVotes + 0.5) {
             const result = getTopVoted(room.votes);
+            io.to(currentRoom).emit('chat message', voteSummary);
             if (result.length === 1) {
                 room.debate = null;
                 if (room.alive[result[0]]) room.alive[result[0]] = false;
@@ -660,6 +664,7 @@ function getTopVoted(votes) {
     let maxVote = -Infinity;
     const topCandidates = [];
     for (const [name, count] of Object.entries(votes)) {
+        if (name === "not voted") continue;
         if (count > maxVote) {
             maxVote = count;
             topCandidates.length = 0;
