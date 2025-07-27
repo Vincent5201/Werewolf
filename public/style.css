@@ -112,3 +112,27 @@ body {
   border-radius: 6px;
   cursor: pointer;
 }
+
+#playerStatusList {
+  width: 200px;
+  background-color: #333;
+  padding: 10px;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.player-status {
+  margin-bottom: 10px;
+  padding: 5px;
+  border-bottom: 1px solid #555;
+}
+
+.player-status.alive {
+  color: #0f0;
+}
+.player-status.dead {
+  color: #f00;
+}
+.player-status.waiting {
+  color: #ccc;
+}

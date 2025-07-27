@@ -19,6 +19,8 @@
     <h2 id="status">等待開始...</h2>
 
     <div class="mainArea">
+        <div id="playerStatusList"></div>
+
         <div class="centerArea">
             <div class="seats" id="seats"></div>
             <button id="startBtn">開始遊戲</button>
@@ -90,6 +92,7 @@
     const messageInput = document.getElementById('messageInput');
     const statusH2 = document.getElementById('status');
     const gameControls = document.getElementById('game-controls');
+    const statusListDiv = document.getElementById('playerStatusList');
 
     let yourName = null;
     let yourRole = null;
@@ -136,6 +139,8 @@
 
     socket.on('update seats', ({ seats }) => {
         seatsDiv.innerHTML = '';
+        const playersInRoom = seats.filter(name => name !== null);
+        statusListDiv.innerHTML = '';
         seats.forEach((name, i) => {
             const seat = document.createElement('div');
             seat.className = 'seat';
@@ -147,7 +152,21 @@
                 else if (!name) socket.emit('sit down', i);
             };
             seatsDiv.appendChild(seat);
+
+            if (name) {
+                const playerDiv = document.createElement('div');
+                playerDiv.classList.add('player-status');
+                playerDiv.id = `status-${name}`;
+                playerDiv.textContent = `${name} - 坐在 ${i + 1} 號 - 等待開始`;
+                playerDiv.classList.add('waiting');
+                statusListDiv.appendChild(playerDiv);
+            }
         });
+    });
+
+    socket.on('update player state', ({ name, state }) => {
+        const div = document.getElementById(`status-${name}`);
+        div.textContent = `${name} - ${state}`;
     });
 
     document.getElementById('startBtn').onclick = () => {
@@ -293,6 +312,10 @@
         if (phase === 'election') {
             statusH2.textContent = `競選警長發言時間, ${talking} 發言`;
             btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'election'});
+            const btn2 = document.createElement('button');
+            btn2.textContent = '放棄競選警長';
+            gameControls.appendChild(btn2);
+            btn2.onclick = () => socket.emit('quit election', { playerName: yourName, phase: 'qElection'});
         } else if (phase === 'daytime') {
             statusH2.textContent = `白天發言時間, ${talking} 發言`;
             btn.onclick = () => socket.emit('end talking', { playerName: yourName, phase: 'daytime'});

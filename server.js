@@ -151,7 +151,10 @@ io.on('connection', socket => {
             room.roles[p.name] = shuffledRoles[i];
             room.alive[p.name] = true;
             console.log(`${p.name} 是 ${shuffledRoles[i]}`)
+            io.to(currentRoom).emit('update player state', { name:p.name, state: '活著' });
         });
+
+        
 
         room.witchUsed = { save: false, poison: false };
         room.dayCount = 0;
@@ -272,6 +275,13 @@ io.on('connection', socket => {
         room.election[playerName] = choice
         if (Object.keys(room.election).length === room.playersCount) {
             if (Object.keys(room.election).filter(n => room.election[n]).length > 0) {
+                for (const [name, elec] of Object.entries(room.election)) {
+                    if (elec === true) {
+                        io.to(currentRoom).emit('update player state', { name:name, state: '競選警長' });
+                    }
+                }
+                
+                room.electionCheck = { ...room.election };
                 room.elecTalkingIdx = 0;
                 while (room.election[room.seats[room.elecTalkingIdx]] !== true) {
                     room.elecTalkingIdx++;
@@ -296,7 +306,7 @@ io.on('connection', socket => {
             if (room.elecTalkingIdx === room.playersCount) {
                 room.votes = {};
                 room.debate = null;
-                const candidates = Object.keys(room.election).filter(name => room.election[name]);
+                const candidates = Object.keys(room.election).filter(name => room.election[name] && room.electionCheck[name]);
                 io.to(currentRoom).emit('election voting', { candidates });
             } else {
                 io.to(currentRoom).emit('talking time', { talking: room.seats[room.elecTalkingIdx], phase: 'election' });
@@ -354,6 +364,11 @@ io.on('connection', socket => {
                 io.to(currentRoom).emit('start voting', { candidates: room.debate });
             } else {
                 io.to(currentRoom).emit('talking time', { talking: room.debate[room.debateIdx], phase: 'debate' });
+            }
+        } else if (phase === 'qElection') {
+            if (room.electionCheck[playerName] === true) {
+                io.to(currentRoom).emit('update player state', { name:playerName, state: '退出競選' });
+                room.electionCheck[playerName] = false;
             }
         }
     });
@@ -416,6 +431,14 @@ io.on('connection', socket => {
             room.alive[poisoned] = false;
         }
         
+        for (const [name, alive] of Object.entries(room.alive)) {
+            if (alive === true) {
+                io.to(currentRoom).emit('update player state', { name:name, state: '活著' });
+            } else {
+                io.to(currentRoom).emit('update player state', { name:name, state: '死了' });
+            }
+        }
+
         io.to(roomId).emit('chat message', `第 ${room.dayCount} 天 天亮了，死亡名單：${deathList.join(', ') || '無人死亡'}`);
         checkGameEnd(roomId);
         
@@ -482,6 +505,7 @@ io.on('connection', socket => {
         if (target !== null && target in room.alive && room.alive[target]) {
             room.alive[target] = false;
             io.to(currentRoom).emit('chat message', `${playerName} 在死前開槍射殺了 ${target}！`);
+            io.to(currentRoom).emit('update player state', { name:target, state: '死了' });
             checkGameEnd(currentRoom);
             room.callback = null;
             
@@ -579,6 +603,7 @@ io.on('connection', socket => {
                 room.debate = null;
                 if (room.alive[result[0]]) room.alive[result[0]] = false;
                 io.to(currentRoom).emit('chat message', `被投票處決的是：${result[0]}`);
+                io.to(currentRoom).emit('update player state', { name:result[0], state: '死了' });
                 if (room.roles[result[0]] === 'idiot') io.to(currentRoom).emit('chat message', `他是白癡`);
                 checkGameEnd(currentRoom);
         
@@ -606,6 +631,7 @@ io.on('connection', socket => {
 
     function checkGameEnd(roomId) {
         const room = rooms[roomId];
+        io.to(roomId).emit('update alive states', room.alive);
         const aliveRoles = Object.entries(room.alive).filter(([name, alive]) => alive).map(([name]) => room.roles[name]);
         const wolves = aliveRoles.filter(r => (r === 'werewolf' || r === 'wolfhunter')).length;
         const villager = aliveRoles.filter(r => r === 'villager').length;
