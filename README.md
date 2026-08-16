@@ -8,7 +8,7 @@
 * **Real-time Communication:** Socket.IO
 * **Frontend:** Vanilla JavaScript, HTML5, CSS3
 * **Deployment:** Render
-* **架構:** 基於 Socket.IO 的事件驅動 (Event-driven) 即時架構，透過伺服器記憶體維護遊戲狀態 (State Management)。
+* **Architecture:** Socket.IO-based event-driven real-time architecture, using in-memory state management on the server. / 基於 Socket.IO 的事件驅動即時架構，透過伺服器記憶體維護遊戲狀態。
 
 ## Implemented Features / 現有功能
 
@@ -30,4 +30,4 @@
 ## Note / 備註
 
 * **Current Limitation:** Error-handling (fool-proofing) is not yet fully implemented. Players must follow the standard procedure; otherwise, errors may occur. / 目前限制：防呆機制尚未完善，玩家需依照正常流程進行操作，否則可能會發生執行錯誤。
-* This is a personal practice project, developed with the assistance of LLMs. / 本專案為個人練習作品，開發過程中使用大型語言模型 (LLM) 輔助製作。
+* This is a personal practice project. / 本專案為個人練習作品。
